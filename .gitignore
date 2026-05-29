@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.o
+*.out
+*.log
+*.tmp
+.DS_Store
+
+# Local runtime files
+nohup.out
+
