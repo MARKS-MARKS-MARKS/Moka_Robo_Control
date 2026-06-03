@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>MR07S 六轴机器人监控终端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "urdf-loader": "https://unpkg.com/urdf-loader@0.12.1/src/URDFLoader.js",
+                "three/examples/jsm/loaders/STLLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/STLLoader.js",
+                "three/examples/jsm/loaders/ColladaLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/ColladaLoader.js"
+            }
+        }
+    </script>
+    <style>
+        .param-card { background: #111827; border: 1px solid #374151; padding: 8px; border-radius: 6px; text-align: center; }
+        .param-value { color: #60a5fa; font-family: monospace; font-weight: bold; font-size: 1.1rem; }
+        .tcp-value { color: #a78bfa; font-family: monospace; font-weight: bold; font-size: 1.1rem; }
+        #canvas-container { background: #0f172a; position: relative; border-radius: 12px; height: 500px; overflow: hidden; }
+        .input-row { display: flex; align-items: center; background: #1f2937; margin: 4px 0; padding: 4px 8px; border-radius: 4px; border: 1px solid #374151; }
+        .coord-input { background: transparent; border: none; color: #fbbf24; width: 100%; text-align: right; outline: none; flex-grow: 1; }
+        /* 提示框动画过度效果 */
+        .toast-enter { opacity: 0; transform: translateY(-20px); }
+        .toast-enter-active { opacity: 1; transform: translateY(0); transition: all 0.3s ease; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white p-4">
+
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto flex justify-between items-center mb-4 bg-gray-800 p-4 rounded-xl border border-gray-700">
+        <h1 class="text-xl font-black text-blue-500 italic">MOKA <span class="text-white not-italic"></span></h1>
+        <div class="flex gap-4 items-center">
+            <div id="status-tag" class="px-3 py-1 rounded bg-red-900 text-red-300 text-xs font-bold border border-red-700 transition-colors">未连接</div>
+            <button onclick="connectRobot()" class="bg-blue-600 hover:bg-blue-500 px-4 py-1 rounded text-sm font-bold transition-colors">连接设备</button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto grid grid-cols-12 gap-6">
+        <div class="col-span-12 lg:col-span-8 flex flex-col gap-4">
+            
+            <div id="canvas-container" class="border border-gray-700 shadow-2xl">
+                <div id="loading-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-50">
+                    <div class="text-blue-400 font-bold mb-2 animate-pulse">正在解析 URDF 模型...</div>
+                    <div id="error-display" class="text-red-400 text-xs font-mono max-w-md text-center"></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 border border-gray-700 p-4 rounded-lg shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-cyan-400 font-bold text-sm tracking-wide border-l-4 border-cyan-500 pl-2">末端相机</span>
+                    <div class="flex items-center gap-2">
+                        <span id="camera-tag" class="px-2 py-1 rounded bg-gray-700 text-gray-300 text-xs font-bold">未检测</span>
+                        <button onclick="checkCamera()" class="bg-slate-600 hover:bg-slate-500 px-3 py-1 rounded text-xs font-bold transition-colors">检测</button>
+                        <button onclick="startCamera()" class="bg-cyan-600 hover:bg-cyan-500 px-3 py-1 rounded text-xs font-bold transition-colors">预览</button>
+                        <button onclick="stopCamera()" class="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-xs font-bold transition-colors">停止</button>
+                    </div>
+                </div>
+                <div class="aspect-video bg-black rounded border border-gray-700 overflow-hidden flex items-center justify-center">
+                    <img id="camera-view" class="w-full h-full object-contain hidden" alt="camera stream">
+                    <span id="camera-placeholder" class="text-gray-500 text-sm">相机画面未开启</span>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 border border-gray-700 p-3 rounded-lg shadow-sm flex justify-between">
+                <span class="text-blue-400 font-bold text-sm tracking-wide border-l-4 border-blue-500 pl-2">机械臂实时状态</span>
+            </div>
+            
+            <div class="grid grid-cols-6 gap-2">
+                <script>
+                    for(let i=1; i<=6; i++) {
+                        document.write(`<div class="param-card"><div class="text-[10px] text-gray-500 font-bold">J${i}(°)</div><div id="d-j${i-1}" class="param-value">0.0</div></div>`);
+                    }
+                </script>
+            </div>
+
+            <div class="grid grid-cols-6 gap-2">
+                <script>
+                    const tcpLabels = ['X', 'Y', 'Z', 'RX', 'RY', 'RZ'];
+                    const tcpUnits = ['mm', 'mm', 'mm', 'Rad', 'Rad', 'Rad'];
+                    for(let i=0; i<6; i++) {
+                        document.write(`<div class="param-card"><div class="text-[10px] text-gray-500 font-bold">${tcpLabels[i]} (${tcpUnits[i]})</div><div id="d-tcp-${i}" class="tcp-value">0.00</div></div>`);
+                    }
+                </script>
+            </div>
+
+        </div>
+
+        <div class="col-span-12 lg:col-span-4 space-y-4">
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 font-bold text-sm mb-4 border-l-4 border-green-500 pl-2">关节控制 (Joint Angle)</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <script>
+                        for(let i=1; i<=6; i++) {
+                            document.write(`
+                                <div class="input-row">
+                                    <span class="text-xs text-gray-500 w-12">J${i}(°)</span>
+                                    <input id="in-j${i-1}" type="number" class="coord-input" value="0" step="0.1">
+                                </div>
+                            `);
+                        }
+                    </script>
+                </div>
+                <button onclick="sendJointMove()" class="w-full mt-4 bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold transition-colors">移动关节</button>
+            </div>
+
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 font-bold text-sm mb-4 border-l-4 border-blue-500 pl-2">末端控制 (TCP)</h3>
+                <div class="grid grid-cols-2 gap-x-2">
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">X(mm)</span><input id="in-x" type="number" class="coord-input" value="450"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">RX(Rad)</span><input id="in-rx" type="number" class="coord-input" value="3.14"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">Y(mm)</span><input id="in-y" type="number" class="coord-input" value="0"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">RY(Rad)</span><input id="in-ry" type="number" class="coord-input" value="0"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">Z(mm)</span><input id="in-z" type="number" class="coord-input" value="300"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-14">RZ(Rad)</span><input id="in-rz" type="number" class="coord-input" value="0"></div>
+                </div>
+                <button onclick="sendMove('movel_cart')" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold transition-colors">执行空间指令</button>
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button onclick="syncTeachFromCurrent()" class="bg-slate-600 hover:bg-slate-500 py-2 rounded-lg font-bold transition-colors">同步当前TCP</button>
+                    <button onclick="addTeachPoint()" class="bg-blue-600 hover:bg-blue-500 py-2 rounded-lg font-bold transition-colors">记录当前点</button>
+                    <button onclick="moveLastTeachPoint()" class="bg-emerald-700 hover:bg-emerald-600 py-2 rounded-lg font-bold transition-colors">移动到最后点</button>
+                    <button onclick="replayTeachPath()" class="bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg font-bold transition-colors">再现路径</button>
+                </div>
+                <button onclick="clearTeachPoints()" class="w-full mt-2 bg-gray-600 hover:bg-gray-500 py-2 rounded-lg font-bold transition-colors">清空记录点</button>
+                <div id="teach-target-info" class="text-xs text-gray-500 mt-3 font-mono border border-gray-700 rounded p-2">示教点：暂无记录</div>
+                <div id="teach-list" class="mt-3 text-xs text-gray-400 font-mono max-h-28 overflow-auto border border-gray-700 rounded p-2">暂无记录点</div>
+            </div>
+            
+            <button onclick="sendStop()" class="w-full bg-red-600 hover:bg-red-700 py-5 rounded-xl font-black text-xl shadow-lg transition-colors">紧急停止</button>
+
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 font-bold text-sm mb-4 border-l-4 border-yellow-500 pl-2">写字功能 (Writing)</h3>
+                <div class="input-row"><span class="text-xs text-gray-500 w-16">文字</span><input id="write-text" class="coord-input text-left" value="永" maxlength="8"></div>
+                <div class="grid grid-cols-2 gap-x-2">
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">中心X</span><input id="write-x" type="number" class="coord-input" value="450"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">中心Y</span><input id="write-y" type="number" class="coord-input" value="0"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">纸面Z</span><input id="write-z" type="number" class="coord-input" value="340"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">抬笔</span><input id="write-lift" type="number" class="coord-input" value="10"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">宽(mm)</span><input id="write-width" type="number" class="coord-input" value="80"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">高(mm)</span><input id="write-height" type="number" class="coord-input" value="80"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">间距</span><input id="write-step" type="number" class="coord-input" value="18"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">RX</span><input id="write-rx" type="number" class="coord-input" value="3.14" step="0.01"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">RY</span><input id="write-ry" type="number" class="coord-input" value="0" step="0.01"></div>
+                    <div class="input-row"><span class="text-xs text-gray-500 w-16">RZ</span><input id="write-rz" type="number" class="coord-input" value="0" step="0.01"></div>
+                </div>
+                <canvas id="write-preview" width="360" height="160" class="w-full h-32 mt-3 rounded border border-gray-700 bg-white"></canvas>
+                <div class="grid grid-cols-2 gap-2 mt-4">
+                    <button onclick="previewWriting()" class="bg-yellow-600 hover:bg-yellow-500 py-2 rounded-lg font-bold transition-colors">预览</button>
+                    <button onclick="syncWritingCenter()" class="bg-slate-600 hover:bg-slate-500 py-2 rounded-lg font-bold transition-colors">同步当前</button>
+                    <button onclick="sendGripper(false)" class="bg-sky-700 hover:bg-sky-600 py-2 rounded-lg font-bold transition-colors">夹爪松开</button>
+                    <button onclick="sendGripper(true)" class="bg-sky-600 hover:bg-sky-500 py-2 rounded-lg font-bold transition-colors">夹爪夹紧</button>
+                </div>
+                <div class="grid grid-cols-1 gap-2 mt-2">
+                    <button onclick="sendWriting()" class="bg-emerald-600 hover:bg-emerald-500 py-2 rounded-lg font-bold transition-colors">开始书写</button>
+                </div>
+            </div>
+
+            <div class="bg-gray-800 p-5 rounded-xl border border-gray-700">
+                <h3 class="text-gray-400 font-bold text-sm mb-4 border-l-4 border-cyan-500 pl-2">气动控制</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="sendSuction(true)" class="bg-cyan-700 hover:bg-cyan-600 py-3 rounded-lg font-bold transition-colors">吸盘开启</button>
+                    <button onclick="sendSuction(false)" class="bg-gray-600 hover:bg-gray-500 py-3 rounded-lg font-bold transition-colors">吸盘关闭</button>
+                </div>
+                <div id="suction-state" class="text-xs text-gray-500 mt-3 font-mono">吸盘状态：未知</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import URDFLoader from 'urdf-loader';
+
+        // --- 全局 UI 提示函数 (Toast) ---
+        window.showToast = (message, type = 'error') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            // 根据类型设置颜色
+            let bgColor = 'bg-red-500'; // 默认错误红
+            if (type === 'success') bgColor = 'bg-green-500';
+            if (type === 'info') bgColor = 'bg-blue-500';
+
+            toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-xl font-bold text-sm tracking-wide toast-enter`;
+            toast.innerText = message;
+            container.appendChild(toast);
+
+            // 触发进入动画
+            requestAnimationFrame(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-enter-active');
+            });
+
+            // 3秒后淡出并移除
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(2, 2, 2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(5, 5, 5);
+        scene.add(dirLight);
+        scene.add(new THREE.GridHelper(5, 15, 0x475569, 0x1e293b));
+
+        const loader = new URDFLoader();
+        loader.packages = { 'mr07s': './mr07s' };
+
+        loader.load('./MR07S.urdf', robot => {
+            robot.rotation.x = -Math.PI / 2;
+            scene.add(robot);
+            window.robot = robot;
+            document.getElementById('loading-overlay').style.display = 'none';
+        }, undefined, err => {
+            document.getElementById('error-display').innerText = "加载失败: " + err.message;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- WebSocket 逻辑 ---
+        let ws = null;
+        let latestJoints = null;
+        let jointInputTouched = false;
+        let jointInputAutoSynced = false;
+        let latestTcp = null;
+        let tcpInputTouched = false;
+        let tcpInputAutoSynced = false;
+        let teachPoints = [];
+
+        // 辅助函数：重置 UI 为未连接状态
+        const setDisconnectedUI = () => {
+            ws = null;
+            const tag = document.getElementById('status-tag');
+            tag.innerText = "未连接";
+            tag.className = "px-3 py-1 rounded bg-red-900 text-red-300 text-xs font-bold border border-red-700 transition-colors";
+        };
+
+        window.connectRobot = () => {
+            // 防止重复连接
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return window.showToast("设备已经处于连接状态！", "success");
+            }
+
+            window.showToast("正在尝试连接设备...", "info");
+
+            try {
+                ws = new WebSocket(`ws://${window.location.hostname}:9002/ws`);
+                
+                ws.onopen = () => {
+                    window.showToast("设备连接成功！", "success");
+                    const tag = document.getElementById('status-tag');
+                    tag.innerText = "已在线";
+                    tag.className = "px-3 py-1 rounded bg-green-900 text-green-300 text-xs font-bold border border-green-700 transition-colors";
+                };
+
+                ws.onerror = (err) => {
+                    console.error("WebSocket Error:", err);
+                    window.showToast("连接失败，请检查机器人后端服务是否开启", "error");
+                    setDisconnectedUI();
+                };
+
+                ws.onclose = () => {
+                    window.showToast("设备连接已断开", "error");
+                    setDisconnectedUI();
+                };
+
+                ws.onmessage = (e) => {
+	                    const data = JSON.parse(e.data);
+	                    if(data.type === 'status') {
+	                        if(data.joints) {
+	                            latestJoints = data.joints;
+	                            data.joints.forEach((v, i) => {
+	                                const displayEl = document.getElementById(`d-j${i}`);
+	                                if(displayEl) displayEl.innerText = v.toFixed(1);
+	                                if(window.robot) {
+	                                    const joint = window.robot.joints[`joint${i+1}`];
+	                                    if(joint) joint.setJointValue(v * Math.PI / 180);
+	                                }
+	                            });
+	                            if(!jointInputTouched && !jointInputAutoSynced) {
+	                                latestJoints.forEach((v, i) => {
+	                                    const input = document.getElementById(`in-j${i}`);
+	                                    if(input) input.value = v.toFixed(2);
+	                                });
+	                                jointInputAutoSynced = true;
+	                            }
+	                        }
+                        if(data.tcp && data.tcp.length === 6) {
+                            latestTcp = data.tcp;
+                            data.tcp.forEach((v, i) => {
+                                const displayTcpEl = document.getElementById(`d-tcp-${i}`);
+                                if(displayTcpEl) displayTcpEl.innerText = v.toFixed(2);
+                            });
+                            if(!tcpInputTouched && !tcpInputAutoSynced) {
+                                writeTeachInputFromPose(latestTcp);
+                                tcpInputAutoSynced = true;
+                            }
+                            updateTeachTargetInfo(latestTcp);
+                        }
+                    }
+                };
+            } catch(e) {
+                window.showToast("建立连接时发生异常", "error");
+                setDisconnectedUI();
+            }
+        };
+
+	        window.sendJointMove = () => {
+	            if(!ws || ws.readyState !== WebSocket.OPEN) {
+	                return window.showToast("请先连接设备！", "error");
+	            }
+	            const angles = [0,1,2,3,4,5].map(i => parseFloat(document.getElementById(`in-j${i}`).value));
+	            if(!angles.every(Number.isFinite)) {
+	                return window.showToast("关节目标包含无效数值", "error");
+	            }
+	            ws.send(JSON.stringify({ type: 'movej_joints', target: angles, speed: 0.2 }));
+	            window.showToast("关节移动指令已发送", "success");
+	        };
+
+        const poseInSafeRange = (pose) => {
+            return Math.abs(pose[0]) <= 1200 && Math.abs(pose[1]) <= 1200 && pose[2] >= -100 && pose[2] <= 1200;
+        };
+
+        const tcpInputPose = () => {
+            const values = ['x','y','z','rx','ry','rz'].map(k => parseFloat(document.getElementById(`in-${k}`).value));
+            return values.every(Number.isFinite) ? values : null;
+        };
+
+        const sendTcpTarget = (target, label = "TCP", type = "movel_cart") => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                return window.showToast("请先连接设备！", "error");
+            }
+            if(!target || target.length !== 6 || target.some(v => !Number.isFinite(v))) {
+                return window.showToast("TCP 输入存在无效数字", "error");
+            }
+            if(!poseInSafeRange(target)) return window.showToast("TCP 目标超出安全范围", "error");
+
+            const jump = latestTcp ? Math.hypot(target[0] - latestTcp[0], target[1] - latestTcp[1], target[2] - latestTcp[2]) : 0;
+            if(jump > 150 && !confirm(`${label} 距离当前 TCP ${jump.toFixed(1)}mm，确认执行？`)) return;
+
+            ws.send(JSON.stringify({ type, target, speed: 0.2 }));
+            updateTeachTargetInfo(target);
+            window.showToast(`${label}空间指令已发送`, "success");
+        };
+
+        window.sendMove = (type = "movel_cart") => {
+            sendTcpTarget(tcpInputPose(), "TCP", type);
+        };
+
+        const updateTeachTargetInfo = (pose) => {
+            const el = document.getElementById('teach-target-info');
+            if(!el) return;
+            if(!pose) {
+                el.innerText = '示教点：暂无记录';
+                return;
+            }
+            el.innerText = `当前TCP: X=${pose[0].toFixed(2)}, Y=${pose[1].toFixed(2)}, Z=${pose[2].toFixed(2)}, RX=${pose[3].toFixed(3)}, RY=${pose[4].toFixed(3)}, RZ=${pose[5].toFixed(3)}`;
+        };
+
+        const updateTeachList = () => {
+            const list = document.getElementById('teach-list');
+            if(!list) return;
+            if(teachPoints.length === 0) {
+                list.innerText = '暂无记录点';
+                return;
+            }
+            list.innerHTML = teachPoints.map((p, i) => {
+                return `
+                    <div class="border-b border-gray-700 last:border-b-0 py-1">
+                        <div>P${i + 1}: X=${p[0].toFixed(1)}, Y=${p[1].toFixed(1)}, Z=${p[2].toFixed(1)}, RX=${p[3].toFixed(2)}, RY=${p[4].toFixed(2)}, RZ=${p[5].toFixed(2)}</div>
+                        <div class="grid grid-cols-3 gap-1 mt-1">
+                            <button onclick="loadTeachPoint(${i})" class="bg-slate-600 hover:bg-slate-500 rounded py-1 text-[11px] font-bold">填入</button>
+                            <button onclick="moveTeachPoint(${i})" class="bg-emerald-700 hover:bg-emerald-600 rounded py-1 text-[11px] font-bold">移动</button>
+                            <button onclick="deleteTeachPoint(${i})" class="bg-gray-600 hover:bg-gray-500 rounded py-1 text-[11px] font-bold">删除</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        const writeTeachInputFromPose = (pose) => {
+            if(!pose) return;
+            ['x','y','z'].forEach((k, i) => {
+                document.getElementById(`in-${k}`).value = pose[i].toFixed(1);
+            });
+            ['rx','ry','rz'].forEach((k, i) => {
+                document.getElementById(`in-${k}`).value = pose[i + 3].toFixed(3);
+            });
+        };
+
+        const sendTeachPoseMove = (pose, label = "示教点") => {
+            sendTcpTarget(pose, label, "movel_cart");
+        };
+
+        const readTeachInputPose = (silent = false) => {
+            const values = ['x','y','z','rx','ry','rz'].map(k => parseFloat(document.getElementById(`in-${k}`).value));
+            if(values.some(v => !Number.isFinite(v))) {
+                if(!silent) window.showToast("TCP 输入存在无效数字", "error");
+                return null;
+            }
+            return values;
+        };
+
+        const updateTeachInputInfo = () => {
+            const pose = readTeachInputPose(true);
+            const el = document.getElementById('teach-target-info');
+            if(!el) return;
+            if(!pose) {
+                updateTeachTargetInfo(null);
+                return;
+            }
+            el.innerText = `输入TCP: X=${pose[0].toFixed(2)}, Y=${pose[1].toFixed(2)}, Z=${pose[2].toFixed(2)}, RX=${pose[3].toFixed(3)}, RY=${pose[4].toFixed(3)}, RZ=${pose[5].toFixed(3)}`;
+        };
+
+        window.syncTeachFromCurrent = () => {
+            if(!latestTcp) return window.showToast("还没有收到 TCP 状态", "error");
+            writeTeachInputFromPose(latestTcp);
+            updateTeachTargetInfo(latestTcp);
+            window.showToast("已刷新当前实际 TCP 位姿", "success");
+        };
+
+        window.addTeachPoint = () => {
+            if(!latestTcp) return window.showToast("还没有收到 TCP 状态", "error");
+            const point = latestTcp.slice(0, 6).map(v => Number(v.toFixed(3)));
+            if(!poseInSafeRange(point)) return window.showToast("当前 TCP 坐标超出安全范围", "error");
+            writeTeachInputFromPose(point);
+            teachPoints.push(point);
+            updateTeachList();
+            updateTeachTargetInfo(point);
+            window.showToast(`已记录 P${teachPoints.length}`, "success");
+        };
+
+        window.loadTeachPoint = (index) => {
+            const point = teachPoints[index];
+            if(!point) return window.showToast("示教点不存在", "error");
+            writeTeachInputFromPose(point);
+            updateTeachTargetInfo(point);
+            window.showToast(`已填入 P${index + 1}`, "success");
+        };
+
+        window.moveTeachPoint = (index) => {
+            const point = teachPoints[index];
+            if(!point) return window.showToast("示教点不存在", "error");
+            writeTeachInputFromPose(point);
+            sendTeachPoseMove(point, `P${index + 1}`);
+        };
+
+        window.moveLastTeachPoint = () => {
+            if(teachPoints.length === 0) return window.showToast("还没有记录点", "error");
+            window.moveTeachPoint(teachPoints.length - 1);
+        };
+
+        window.deleteTeachPoint = (index) => {
+            if(!teachPoints[index]) return window.showToast("示教点不存在", "error");
+            teachPoints.splice(index, 1);
+            updateTeachList();
+            window.showToast("示教点已删除", "success");
+        };
+
+        window.replayTeachPath = () => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) return window.showToast("请先连接设备！", "error");
+            if(teachPoints.length === 0) return window.showToast("还没有记录点", "error");
+            const points = teachPoints.map(p => p.slice(0, 6));
+            if(points.some(p => !poseInSafeRange(p))) {
+                return window.showToast("路径中存在超出安全范围的点", "error");
+            }
+            if(!confirm(`即将再现 ${points.length} 个示教点，请确认周围安全。`)) return;
+            updateTeachTargetInfo(points[points.length - 1]);
+            ws.send(JSON.stringify({ type: 'cart_path', points }));
+            window.showToast(`示教路径已发送：${points.length} 点`, "success");
+        };
+
+        window.clearTeachPoints = () => {
+            teachPoints = [];
+            updateTeachList();
+            window.showToast("示教点已清空", "success");
+        };
+
+        window.sendStop = () => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                return window.showToast("请先连接设备！", "error");
+            }
+            ws.send(JSON.stringify({ type: 'estop' }));
+            window.showToast("已发送急停指令！", "error"); // 红色强调急停
+        };
+
+        const numberValue = (id, fallback) => {
+            const value = parseFloat(document.getElementById(id).value);
+            return Number.isFinite(value) ? value : fallback;
+        };
+
+        const setCameraTag = (text, ok = null) => {
+            const tag = document.getElementById('camera-tag');
+            tag.innerText = text;
+            if(ok === true) tag.className = "px-2 py-1 rounded bg-green-900 text-green-300 text-xs font-bold";
+            else if(ok === false) tag.className = "px-2 py-1 rounded bg-red-900 text-red-300 text-xs font-bold";
+            else tag.className = "px-2 py-1 rounded bg-gray-700 text-gray-300 text-xs font-bold";
+        };
+
+        window.checkCamera = async () => {
+            try {
+                const resp = await fetch('/camera/status', { cache: 'no-store' });
+                const data = await resp.json();
+                setCameraTag(data.ok ? "已连接" : "不可用", data.ok);
+                window.showToast(data.ok ? "相机已连接" : data.detail, data.ok ? "success" : "error");
+            } catch(e) {
+                setCameraTag("检测失败", false);
+                window.showToast("相机检测接口不可用", "error");
+            }
+        };
+
+        window.startCamera = async () => {
+            await window.checkCamera();
+            const img = document.getElementById('camera-view');
+            const placeholder = document.getElementById('camera-placeholder');
+            img.src = `/camera/stream?t=${Date.now()}`;
+            img.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+        };
+
+        window.stopCamera = () => {
+            const img = document.getElementById('camera-view');
+            const placeholder = document.getElementById('camera-placeholder');
+            img.removeAttribute('src');
+            img.classList.add('hidden');
+            placeholder.classList.remove('hidden');
+            setCameraTag("已停止", null);
+        };
+
+        window.syncWritingCenter = () => {
+            if(!latestTcp) return window.showToast("还没有收到 TCP 状态", "error");
+            if(Math.abs(latestTcp[0]) > 1200 || Math.abs(latestTcp[1]) > 1200 || Math.abs(latestTcp[2]) > 1200) {
+                return window.showToast("TCP 坐标异常，请重启底层并刷新页面", "error");
+            }
+            document.getElementById('write-x').value = latestTcp[0].toFixed(1);
+            document.getElementById('write-y').value = latestTcp[1].toFixed(1);
+            document.getElementById('write-z').value = (latestTcp[2] + 30).toFixed(1);
+            previewWriting();
+            window.showToast("已用当前 TCP 设置空跑书写中心", "success");
+        };
+
+        const hanziDataCache = new Map();
+        const backendHanziApi = `http://${window.location.hostname}:9002/hanzi`;
+
+        const fallbackStrokes = [
+            [[-0.35, 0.30], [0.35, 0.30]],
+            [[0.00, 0.42], [0.00, -0.42]],
+            [[-0.30, -0.10], [0.30, -0.10]]
+        ];
+
+        const yongFallbackStrokes = [
+            [[-0.04, 0.46], [0.02, 0.34], [0.08, 0.24]],
+            [[-0.26, 0.22], [0.28, 0.22]],
+            [[0.00, 0.22], [0.00, -0.34], [-0.08, -0.44]],
+            [[-0.04, 0.08], [-0.28, -0.16], [-0.38, -0.34]],
+            [[0.04, 0.06], [0.24, -0.12], [0.42, -0.36]],
+            [[-0.18, -0.02], [0.18, -0.02]],
+            [[-0.12, -0.18], [0.14, -0.18]]
+        ];
+
+        const isValidHanziData = (data) => (
+            data && Array.isArray(data.medians) && data.medians.length > 0
+        );
+
+        const loadHanziData = async (char) => {
+            if(hanziDataCache.has(char)) return hanziDataCache.get(char);
+
+            const sources = [
+                {
+                    source: 'backend-same-origin',
+                    url: `/hanzi/${encodeURIComponent(char)}`,
+                    extract: payload => payload && payload.ok ? payload.data : null
+                },
+                {
+                    source: 'backend-9002',
+                    url: `${backendHanziApi}/${encodeURIComponent(char)}`,
+                    extract: payload => payload && payload.ok ? payload.data : null
+                },
+                {
+                    source: 'local-static',
+                    url: `./hanzi-data/${encodeURIComponent(char)}.json`,
+                    extract: payload => payload
+                }
+            ];
+
+            for(const item of sources) {
+                try {
+                    const resp = await fetch(item.url, { cache: 'no-store' });
+                    if(!resp.ok) continue;
+                    const payload = await resp.json();
+                    const data = item.extract(payload);
+                    if(isValidHanziData(data)) {
+                        const result = { data, source: item.source };
+                        hanziDataCache.set(char, result);
+                        return result;
+                    }
+                } catch(e) {
+                    // Try the next source before falling back to built-in strokes.
+                }
+            }
+
+            hanziDataCache.set(char, null);
+            return null;
+        };
+
+        const normalizeMedians = (medians) => {
+            const allPoints = medians.flat().filter(p => Array.isArray(p) && p.length >= 2);
+            if(allPoints.length === 0) return { strokes: [], bounds: null };
+
+            const xs = allPoints.map(p => p[0]);
+            const ys = allPoints.map(p => p[1]);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const rangeX = Math.max(1, maxX - minX);
+            const rangeY = Math.max(1, maxY - minY);
+            const scale = Math.max(rangeX, rangeY);
+
+            const strokes = medians
+                .map(stroke => stroke
+                    .filter(p => Array.isArray(p) && p.length >= 2)
+                    .map(([x, y]) => [
+                        (x - centerX) / scale,
+                        (y - centerY) / scale
+                    ])
+                )
+                .filter(stroke => stroke.length > 0);
+
+            return {
+                strokes,
+                bounds: { minX, maxX, minY, maxY, centerX, centerY, rangeX, rangeY, scale }
+            };
+        };
+
+        const getWritingStrokes = async (char) => {
+            const result = await loadHanziData(char);
+            if(result) {
+                const normalized = normalizeMedians(result.data.medians);
+                return { strokes: normalized.strokes, bounds: normalized.bounds, source: result.source };
+            }
+            if(char === '永') return { strokes: yongFallbackStrokes, source: 'fallback' };
+            return { strokes: fallbackStrokes, source: 'fallback' };
+        };
+
+        const distance2d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+        const simplifyPaperStroke = (stroke, minDistanceMm) => {
+            if(stroke.length <= 2) return stroke;
+            const simplified = [stroke[0]];
+            for(let i = 1; i < stroke.length - 1; i++) {
+                if(distance2d(stroke[i], simplified[simplified.length - 1]) >= minDistanceMm) {
+                    simplified.push(stroke[i]);
+                }
+            }
+            const last = stroke[stroke.length - 1];
+            if(distance2d(last, simplified[simplified.length - 1]) > 0) simplified.push(last);
+            return simplified;
+        };
+
+        const resamplePaperStroke = (stroke, spacingMm) => {
+            if(stroke.length <= 1) return stroke;
+            const result = [stroke[0]];
+            let carry = 0;
+            for(let i = 1; i < stroke.length; i++) {
+                let prev = stroke[i - 1];
+                const curr = stroke[i];
+                let segmentLength = distance2d(prev, curr);
+                if(segmentLength <= 0.0001) continue;
+                while(carry + segmentLength >= spacingMm) {
+                    const t = (spacingMm - carry) / segmentLength;
+                    const next = {
+                        x: prev.x + (curr.x - prev.x) * t,
+                        y: prev.y + (curr.y - prev.y) * t
+                    };
+                    result.push(next);
+                    prev = next;
+                    segmentLength = distance2d(prev, curr);
+                    carry = 0;
+                    if(segmentLength <= 0.0001) break;
+                }
+                carry += segmentLength;
+            }
+            const last = stroke[stroke.length - 1];
+            if(distance2d(last, result[result.length - 1]) > 0.001) result.push(last);
+            return result;
+        };
+
+        const makeWritingPath = async () => {
+            const text = document.getElementById('write-text').value.trim() || '永';
+            const originX = numberValue('write-x', 450);
+            const originY = numberValue('write-y', 0);
+            const paperZ = numberValue('write-z', 300);
+            const lift = numberValue('write-lift', 12);
+            const widthMm = Math.min(140, Math.max(30, numberValue('write-width', 80)));
+            const heightMm = Math.min(140, Math.max(30, numberValue('write-height', 80)));
+            const sampleSpacingMm = Math.min(20, Math.max(2, numberValue('write-step', 6)));
+            const rx = numberValue('write-rx', 3.14);
+            const ry = numberValue('write-ry', 0);
+            const rz = numberValue('write-rz', 0);
+            const maxWritePoints = 512;
+            let generatedPointCount = 0;
+            let pointLimitExceeded = false;
+
+            const points = [];
+            const pushPose = (x, y, z) => {
+                points.push([
+                    Number(x.toFixed(3)),
+                    Number(y.toFixed(3)),
+                    Number(z.toFixed(3)),
+                    rx, ry, rz
+                ]);
+            };
+            const mapToPaper = (nx, ny, charCenterNormX, charScaleX) => {
+                const x = originX + (charCenterNormX + nx * charScaleX) * widthMm;
+                const y = originY + ny * heightMm;
+                return { x, y };
+            };
+            const appendStroke = (stroke, charCenterNormX, charScaleX) => {
+                if(!stroke || stroke.length === 0) return;
+                const paperStroke = stroke.map(([nx, ny]) => mapToPaper(nx, ny, charCenterNormX, charScaleX));
+                const cleanedStroke = simplifyPaperStroke(paperStroke, Math.max(0.5, sampleSpacingMm * 0.35));
+                const sampledStroke = resamplePaperStroke(cleanedStroke, sampleSpacingMm);
+                if(sampledStroke.length === 0) return;
+                const firstPoint = sampledStroke[0];
+                pushPose(firstPoint.x, firstPoint.y, paperZ + lift);
+                pushPose(firstPoint.x, firstPoint.y, paperZ);
+                sampledStroke.forEach((point) => {
+                    pushPose(point.x, point.y, paperZ);
+                });
+                const lastPoint = sampledStroke[sampledStroke.length - 1];
+                pushPose(lastPoint.x, lastPoint.y, paperZ + lift);
+            };
+
+            const chars = [...text].slice(0, 3);
+            const charCount = Math.max(1, chars.length);
+            const missingChars = [];
+
+            for (let ci = 0; ci < chars.length; ci++) {
+                const ch = chars[ci];
+                const { strokes, source } = await getWritingStrokes(ch);
+                if(source === 'fallback') missingChars.push(ch);
+                const charCenterNormX = (ci - (charCount - 1) / 2) / charCount;
+                const charScaleX = 1 / charCount;
+                strokes.forEach(stroke => appendStroke(stroke, charCenterNormX, charScaleX));
+            }
+
+            generatedPointCount = points.length;
+            if(points.length > maxWritePoints) {
+                pointLimitExceeded = true;
+                window.showToast(`轨迹点 ${generatedPointCount} 个，超过底层上限 ${maxWritePoints} 个；请增大采样间距或减少字数。`, "error");
+            }
+
+            if(missingChars.length > 0) {
+                window.showToast(`缺少字库数据，已使用兜底笔画：${[...new Set(missingChars)].join('')}`, "error");
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 8;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            points.forEach((p, i) => {
+                const x = ((p[0] - originX) / widthMm + 0.5) * canvas.width;
+                const y = (0.5 - (p[1] - originY) / heightMm) * canvas.height;
+                if (i === 0 || p[2] > paperZ) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            return {
+                points,
+                lift,
+                raster: canvas,
+                originX,
+                originY,
+                widthMm,
+                heightMm,
+                paperZ,
+                generatedPointCount,
+                sampleSpacingMm,
+                maxWritePoints,
+                pointLimitExceeded
+            };
+        };
+
+        window.previewWriting = async () => {
+            const { points, raster, originX, originY, widthMm, heightMm, paperZ } = await makeWritingPath();
+            const preview = document.getElementById('write-preview');
+            const ctx = preview.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, preview.width, preview.height);
+            ctx.drawImage(raster, 0, 0, preview.width, preview.height);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            points.forEach((p, i) => {
+                const x = ((p[0] - originX) / widthMm + 0.5) * preview.width;
+                const y = (0.5 - (p[1] - originY) / heightMm) * preview.height;
+                if (i === 0 || p[2] > paperZ) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            window.showToast(`已生成 ${points.length} 个航点`, "info");
+        };
+
+        window.sendGripper = (closed) => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                return window.showToast("请先连接设备！", "error");
+            }
+            ws.send(JSON.stringify({ type: 'gripper', closed }));
+            window.showToast(closed ? "夹爪夹紧指令已发送" : "夹爪松开指令已发送", "success");
+        };
+
+        const sendIo = (channel, value) => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                window.showToast("请先连接设备！", "error");
+                return false;
+            }
+            ws.send(JSON.stringify({ type: 'ioset', channel, value: Boolean(value) }));
+            return true;
+        };
+
+        window.sendSuction = (enabled) => {
+            const stateEl = document.getElementById('suction-state');
+            if(enabled) {
+                if(!sendIo(13, true)) return;
+                setTimeout(() => sendIo(14, true), 120);
+                if(stateEl) stateEl.innerText = '吸盘状态：开启 (IO13=1, IO14=1)';
+                window.showToast("吸盘开启指令已发送", "success");
+            } else {
+                if(!sendIo(14, false)) return;
+                if(stateEl) stateEl.innerText = '吸盘状态：关闭 (IO14=0, IO13保持供气)';
+                window.showToast("吸盘关闭指令已发送", "success");
+            }
+        };
+
+        window.sendWriting = async () => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                return window.showToast("请先连接设备！", "error");
+            }
+            const { points, lift, generatedPointCount, maxWritePoints, pointLimitExceeded } = await makeWritingPath();
+            if(points.length < 4) return window.showToast("没有生成可书写轨迹", "error");
+            if(pointLimitExceeded) {
+                return window.showToast(`轨迹点 ${generatedPointCount} 个超过底层上限 ${maxWritePoints} 个，未发送。`, "error");
+            }
+            if(points.some(p => Math.abs(p[0]) > 1200 || Math.abs(p[1]) > 1200 || p[2] < -100 || p[2] > 1200)) {
+                return window.showToast("轨迹坐标超出安全范围，已拒绝发送", "error");
+            }
+            if(!latestTcp) return window.showToast("请先连接设备并同步当前 TCP", "error");
+            const first = points[0];
+            const jump = Math.hypot(first[0] - latestTcp[0], first[1] - latestTcp[1], first[2] - latestTcp[2]);
+            if(jump > 80) {
+                return window.showToast(`首段距离 ${jump.toFixed(1)}mm，先点“同步当前”或减小尺寸`, "error");
+            }
+            if(!confirm(`即将发送 ${points.length} 个航点，首段距离 ${jump.toFixed(1)}mm。请确认机器人周围安全。`)) return;
+            ws.send(JSON.stringify({ type: 'write_path', points, lift }));
+            window.showToast(`书写轨迹已发送：${points.length} 个航点`, "success");
+        };
+
+	        window.addEventListener('load', () => {
+	            previewWriting();
+	            checkCamera();
+	            updateTeachList();
+	            updateTeachTargetInfo(latestTcp);
+	            [0, 1, 2, 3, 4, 5].forEach(i => {
+	                const el = document.getElementById(`in-j${i}`);
+	                if(el) el.addEventListener('input', () => {
+	                    jointInputTouched = true;
+	                });
+	            });
+	            ['in-x', 'in-y', 'in-z', 'in-rx', 'in-ry', 'in-rz'].forEach(id => {
+	                const el = document.getElementById(id);
+	                if(el) el.addEventListener('input', () => {
+                    tcpInputTouched = true;
+                    updateTeachInputInfo();
+                });
+            });
+        });
+    </script>
+</body>
+</html>

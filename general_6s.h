@@ -44,16 +44,16 @@ public:
 	* @param velCurrent 起始点的速度
 	* @param accCurrent 起始点的加速度
 	* @param Ts 插补周期
-	* @param maxVelL 最大直线速度
-	* @param maxAccL 最大直线加速度
-	* @param maxDecelL 最大直线减速度
-	* @param maxJerk 最大雅可比速度
-	* @param maxJerk nAglSeqPtr 插补得到的队列
+	* @param velPerc 速度百分比，语义与 move_joint_interp 一致
+	* @param accPerc 加速度百分比，语义与 move_joint_interp 一致
+	* @param decPerc 减速度百分比，语义与 move_joint_interp 一致
+	* @param jerkPerc 雅可比速度百分比
+	* @param nAglSeqPtr 插补得到的队列
 	*/
 	virtual void move_line_interp(const VectorXd &targetPoint,
 			const VectorXd &originPoint, const VectorXd &originACS, double velCurrent, double accCurrent,
-			double Ts, double maxVelL, double maxAccL, double maxDecelL,
-			double maxJerk, std::deque<double> &nAglSeqPtr);
+			double Ts, double velPerc, double accPerc, double decPerc,
+			double jerkPerc, std::deque<double> &nAglSeqPtr);
 	/**
 	* @brief 转移矩阵转直角坐标
 	* @param m 转移矩阵

@@ -1,5 +1,9 @@
 ﻿#include <unistd.h>
 #include "general_6s.h"
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <vector>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -14,11 +18,9 @@
 #include <thread>
 #include "eigen/Eigen/Eigen"
 #include <deque> 
-#include <vector>
 #include <iostream>
 #include <sstream>
 #include <fstream>  
-#include <mutex>
 
 // --- 新增：网络通信库 ---
 #include <sys/socket.h>
@@ -53,7 +55,6 @@ int flag[6] = { 0 };
 int flag2 = 0;
 int step_ms = 0;
 static uint8_t* domain1_pd = NULL;
-static bool IO_ISCHANGE = false;
 static bool IO_OUTPUT_VALID = false;
 static int io_data = 0;
 
@@ -64,10 +65,8 @@ static int io_data = 0;
 #define PANASONIC_1        0,1                        
 #define PANASONIC_0        0,0                        
 #define IO_ban             0,6
-#define AXIS_NUM 6
-#define ENABLE_GRIPPER_IO 1
-#define SLAVE_NUM (ENABLE_GRIPPER_IO ? 7 : AXIS_NUM)
-#define GRIPPER_AIR_IO 13
+#define num_ 6
+#define SLAVE_NUM 7
 #define GRIPPER_OPEN_IO 15
 #define GRIPPER_CLOSE_IO 16
 uint16_t a[7] = { 0 };
@@ -94,6 +93,18 @@ struct io_out {
 	int io16 = 0;
 };
 
+bool PowerStatus = 0;
+bool NeedPowerOn = 0;
+bool NeedPowerOff = 0;
+std::deque<double> angle_deque;
+std::deque<double> angle_deque_out;
+std::deque<int> tor_deque_out;
+bool count_start = 0;
+std::atomic<bool> g_estop_requested(false);
+static const size_t MAX_WRITE_POINTS = 512;
+static const size_t MAX_TRAJECTORY_QUEUE_VALUES = 600000;
+static io_out IO_out;
+
 struct PosePoint {
 	double x;
 	double y;
@@ -102,22 +113,6 @@ struct PosePoint {
 	double ry;
 	double rz;
 };
-
-static io_out IO_out;
-
-bool PowerStatus = 0;
-bool NeedPowerOn = 0;
-bool NeedPowerOff = 0;
-std::deque<double> angle_deque;
-std::deque<double> angle_deque_out;
-std::deque<int> tor_deque_out;
-bool count_start = 0;
-static unsigned long long cycle_count = 0;
-static unsigned long long servo_write_count = 0;
-static double last_actual_deg[6] = {0};
-static double last_target_deg[6] = {0};
-static std::string last_command = "none";
-static std::mutex trajectory_mutex;
 
 using namespace std;
 
@@ -192,10 +187,8 @@ const static ec_pdo_entry_reg_t domain1_regs[] = {
 	{PANASONIC_5, VID_PID, 0x6041, 0, &offset.status_word[5]},
 	{PANASONIC_5, VID_PID, 0x6064, 0, &offset.position_actual_value[5]},
 	{PANASONIC_5, VID_PID, 0x6077, 0, &offset.torque_actual_value[5]},
-#if ENABLE_GRIPPER_IO
 	{IO_ban, VID_PID2, 0x7000, 0, &offset.io_out},
 	{IO_ban, VID_PID2, 0x6000, 0, &offset.io_in},
-#endif
 	{}
 };
 
@@ -250,11 +243,76 @@ void check_master_state(void){ /*...*/ }
 void check_slave_config_states(ec_slave_config_t* sc, int i) {
 	ec_slave_config_state_t s;
 	ecrt_slave_config_state(sc, &s);
-	if (i < AXIS_NUM && s.operational == 1) flag[i] = 1;
+	if (s.operational == 1) flag[i] = 1;
 	sc_state[i] = s;
 }
 
-int pack_io_data(const io_out& out) {
+bool parse_vector6(std::stringstream& ss, VectorXd& values)
+{
+	values.resize(6);
+	for (int i = 0; i < 6; ++i)
+	{
+		double value = 0.0;
+		if (!(ss >> value) || !std::isfinite(value))
+		{
+			return false;
+		}
+		values(i) = value;
+	}
+	return true;
+}
+
+bool try_pop_target_pos_set_compat(std::array<int, 6>& target_inc)
+{
+	std::deque<double>& pending = g_general_6s->get_angle_deque();
+	if (pending.size() < 6)
+	{
+		return false;
+	}
+
+	for (int i = 0; i < 6; ++i)
+	{
+		target_inc[i] = g_general_6s->set_target_pos_to_servo(i);
+	}
+	return true;
+}
+
+void clear_angle_deque_compat()
+{
+	g_general_6s->get_angle_deque().clear();
+}
+
+VectorXd get_current_joint_angles()
+{
+	VectorXd joint_angles(6);
+	for (int i = 0; i < 6; ++i)
+	{
+		joint_angles(i) = g_general_6s->getActPositionAngle(i);
+	}
+	return joint_angles;
+}
+
+VectorXd calc_tcp_pose_from_joints(const VectorXd& joint_angles)
+{
+	MatrixXd trans_matrix;
+	g_general_6s->calc_forward_kin(joint_angles, trans_matrix);
+	return g_general_6s->tr_2_MCS(trans_matrix);
+}
+
+bool pose_values_finite(const PosePoint& point)
+{
+	return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z) &&
+		std::isfinite(point.rx) && std::isfinite(point.ry) && std::isfinite(point.rz);
+}
+
+bool pose_in_safe_range(const PosePoint& point)
+{
+	return fabs(point.x) <= 1200 && fabs(point.y) <= 1200 &&
+		point.z >= -100 && point.z <= 1200;
+}
+
+int pack_io_data(const io_out& out)
+{
 	return out.io1 + out.io2 * 2 + out.io3 * 4 + out.io4 * 8 +
 		out.io5 * 16 + out.io6 * 32 + out.io7 * 64 + out.io8 * 128 +
 		out.io9 * 256 + out.io10 * 512 + out.io11 * 1024 + out.io12 * 2048 +
@@ -262,7 +320,8 @@ int pack_io_data(const io_out& out) {
 		out.io15 * 4096 * 4 + out.io16 * 4096 * 8;
 }
 
-void set_io_bit(io_out& out, int channel, int value) {
+void set_io_bit(io_out& out, int channel, int value)
+{
 	switch (channel) {
 		case 1: out.io1 = value; break;
 		case 2: out.io2 = value; break;
@@ -284,7 +343,8 @@ void set_io_bit(io_out& out, int channel, int value) {
 	}
 }
 
-int get_io_bit(const io_out& out, int channel) {
+int get_io_bit(const io_out& out, int channel)
+{
 	switch (channel) {
 		case 1: return out.io1;
 		case 2: return out.io2;
@@ -306,106 +366,38 @@ int get_io_bit(const io_out& out, int channel) {
 	}
 }
 
-void set_gripper(bool closed) {
-#if ENABLE_GRIPPER_IO
-	set_io_bit(IO_out, GRIPPER_AIR_IO, 1);
-	set_io_bit(IO_out, GRIPPER_OPEN_IO, closed ? 0 : 1);
-	set_io_bit(IO_out, GRIPPER_CLOSE_IO, closed ? 1 : 0);
-	io_data = pack_io_data(IO_out);
-	IO_ISCHANGE = true;
-	IO_OUTPUT_VALID = true;
-	printf("[底层] 夹爪%s指令已写入 IO：air io%d=%d open io%d=%d close io%d=%d data=%d。\n",
-		closed ? "夹紧" : "松开",
-		GRIPPER_AIR_IO, get_io_bit(IO_out, GRIPPER_AIR_IO),
-		GRIPPER_OPEN_IO, get_io_bit(IO_out, GRIPPER_OPEN_IO),
-		GRIPPER_CLOSE_IO, get_io_bit(IO_out, GRIPPER_CLOSE_IO),
-		io_data);
-#else
-	printf("[底层] 已收到夹爪%s指令，但当前构建未启用 IO 从站，未写 EtherCAT IO。\n", closed ? "夹紧" : "松开");
-#endif
-}
-
-void set_single_io(int channel, int value) {
-#if ENABLE_GRIPPER_IO
-	if (channel < 1 || channel > 16) {
-		printf("[底层-拒绝] IO 通道非法: %d，应为 1-16。\n", channel);
-		return;
+bool parse_pose_points(std::stringstream& ss, int count, size_t max_count, std::vector<PosePoint>& points, const char* cmd_name)
+{
+	if (count <= 0) {
+		printf("[底层-拒绝] %s 点数非法: %d。\n", cmd_name, count);
+		return false;
 	}
-	set_io_bit(IO_out, channel, value ? 1 : 0);
-	io_data = pack_io_data(IO_out);
-	IO_ISCHANGE = true;
-	IO_OUTPUT_VALID = true;
-	printf("[底层] IOSET io%d=%d data=%d。\n", channel, value ? 1 : 0, io_data);
-#else
-	printf("[底层] 已收到 IOSET io%d=%d，但当前构建未启用 IO 从站。\n", channel, value ? 1 : 0);
-#endif
-}
-
-void clear_all_io() {
-#if ENABLE_GRIPPER_IO
-	IO_out = io_out();
-	io_data = pack_io_data(IO_out);
-	IO_ISCHANGE = true;
-	IO_OUTPUT_VALID = true;
-	printf("[底层] 已清空全部 IO 输出，data=%d。\n", io_data);
-#else
-	printf("[底层] 已收到 IOCLEAR，但当前构建未启用 IO 从站。\n");
-#endif
-}
-
-void write_debug_status() {
-	static unsigned long long last_dump_cycle = 0;
-	if (cycle_count - last_dump_cycle < FREQUENCY) return;
-	last_dump_cycle = cycle_count;
-
-	std::ofstream out("/tmp/moka_status.txt");
-	if (!out) return;
-	out << "cycle_count=" << cycle_count << "\n";
-	out << "PowerStatus=" << PowerStatus << "\n";
-	out << "NeedPowerOn=" << NeedPowerOn << "\n";
-	out << "flag2=" << flag2 << "\n";
-	out << "flags=";
-	for (int i = 0; i < 6; i++) out << flag[i] << (i == 5 ? "\n" : " ");
-	size_t queue_size = 0;
-	{
-		std::lock_guard<std::mutex> lock(trajectory_mutex);
-		queue_size = g_general_6s->get_angle_deque().size();
-	}
-	out << "queue_size=" << queue_size << "\n";
-	out << "servo_write_count=" << servo_write_count << "\n";
-	out << "last_command=" << last_command << "\n";
-#if ENABLE_GRIPPER_IO
-	out << "io_enabled=1\n";
-	out << "io_output_valid=" << IO_OUTPUT_VALID << "\n";
-	out << "io_data=" << io_data << "\n";
-	out << "gripper_air_io=" << GRIPPER_AIR_IO << "\n";
-	out << "gripper_close_io=" << GRIPPER_CLOSE_IO << "\n";
-	out << "gripper_open_io=" << GRIPPER_OPEN_IO << "\n";
-	out << "gripper_air_value=" << get_io_bit(IO_out, GRIPPER_AIR_IO) << "\n";
-	out << "gripper_close_value=" << get_io_bit(IO_out, GRIPPER_CLOSE_IO) << "\n";
-	out << "gripper_open_value=" << get_io_bit(IO_out, GRIPPER_OPEN_IO) << "\n";
-	out << "io13=" << IO_out.io13 << "\n";
-	out << "io5=" << IO_out.io5 << "\n";
-	out << "io6=" << IO_out.io6 << "\n";
-	out << "io15=" << IO_out.io15 << "\n";
-	out << "io16=" << IO_out.io16 << "\n";
-	out << "io_bits=";
-	for (int i = 1; i <= 16; i++) out << get_io_bit(IO_out, i) << (i == 16 ? "\n" : " ");
-#else
-	out << "io_enabled=0\n";
-#endif
-	out << "actual_deg=";
-	for (int i = 0; i < 6; i++) out << last_actual_deg[i] << (i == 5 ? "\n" : " ");
-	out << "last_target_deg=";
-	for (int i = 0; i < 6; i++) out << last_target_deg[i] << (i == 5 ? "\n" : " ");
-}
-
-void append_line_move(const VectorXd& target, std::deque<double>& trajectory) {
-	VectorXd originACS(6);
-	for(int i=0; i<6; i++) {
-		originACS(i) = g_general_6s->getActPositionAngle(i);
+	if ((size_t)count > max_count) {
+		printf("[底层-拒绝] %s 点数超限: 声明=%d，上限=%zu，未解析。\n", cmd_name, count, max_count);
+		return false;
 	}
 
+	points.clear();
+	points.reserve((size_t)count);
+	for (int i = 0; i < count; i++) {
+		PosePoint point;
+		if (!(ss >> point.x >> point.y >> point.z >> point.rx >> point.ry >> point.rz)) {
+			printf("[底层-拒绝] %s 解析失败: 声明 %d 点，实际成功解析 %zu 点。\n",
+				cmd_name, count, points.size());
+			return false;
+		}
+		if (!pose_values_finite(point)) {
+			printf("[底层-拒绝] %s 第 %d 点存在非有限数值。\n", cmd_name, i);
+			return false;
+		}
+		points.push_back(point);
+	}
+	return true;
+}
+
+bool append_write_move(const VectorXd& target, std::deque<double>& trajectory)
+{
+	VectorXd originACS = get_current_joint_angles();
 	MatrixXd originTrans;
 	g_general_6s->calc_forward_kin(originACS, originTrans);
 	VectorXd originMCS = g_general_6s->tr_2_MCS(originTrans);
@@ -419,19 +411,18 @@ void append_line_move(const VectorXd& target, std::deque<double>& trajectory) {
 	}
 
 	VectorXd safeTarget(target);
-	// 书写时只改变 TCP 位置，姿态保持当前末端姿态，避免逆解切到手腕翻转构型。
+	// 书写只使用目标位置，姿态保持当前末端姿态，避免笔画之间触发手腕翻转。
 	safeTarget(3) = originMCS(3);
 	safeTarget(4) = originMCS(4);
 	safeTarget(5) = originMCS(5);
 
-	VectorXd targetACS(6);
-	targetACS = originACS;
+	VectorXd targetACS = originACS;
 	g_general_6s->calc_inverse_kin(g_general_6s->rpy_2_tr(safeTarget), originACS, targetACS);
 
 	for (int i = 0; i < 6; i++) {
 		if (fabs(targetACS(i) - originACS(i)) > 35.0) {
 			printf("[底层-拒绝] WRITE 单段关节变化过大: J%d %.3f -> %.3f。\n", i + 1, originACS(i), targetACS(i));
-			return;
+			return false;
 		}
 	}
 
@@ -442,235 +433,85 @@ void append_line_move(const VectorXd& target, std::deque<double>& trajectory) {
 		0.001, 3.0, 5.0, 5.0, 5.0,
 		trajectory
 	);
-}
-
-bool append_pose_move(const VectorXd& target, std::deque<double>& trajectory) {
-	VectorXd originACS(6);
-	for(int i=0; i<6; i++) {
-		originACS(i) = g_general_6s->getActPositionAngle(i);
-	}
-
-	if (!trajectory.empty() && trajectory.size() >= 6) {
-		for (int i = 0; i < 6; i++) {
-			originACS(i) = trajectory[trajectory.size() - 6 + i];
-		}
-	}
-
-	VectorXd targetACS(6);
-	targetACS = originACS;
-	g_general_6s->calc_inverse_kin(g_general_6s->rpy_2_tr(target), originACS, targetACS);
-
-	double max_delta = 0.0;
-	for (int i = 0; i < 6; i++) {
-		if (fabs(targetACS(i) - originACS(i)) > max_delta) {
-			max_delta = fabs(targetACS(i) - originACS(i));
-		}
-	}
-	if (max_delta < 0.001) {
-		printf("[底层-拒绝] CARTPATH 逆解未产生有效关节目标，目标TCP: %.3f %.3f %.3f %.3f %.3f %.3f。\n",
-			target(0), target(1), target(2), target(3), target(4), target(5));
-		return false;
-	}
-
-	for (int i = 0; i < 6; i++) {
-		if (fabs(targetACS(i) - originACS(i)) > 45.0) {
-			printf("[底层-拒绝] CARTPATH 单段关节变化过大: J%d %.3f -> %.3f。\n", i + 1, originACS(i), targetACS(i));
-			return false;
-		}
-	}
-
-	VectorXd vel_current = VectorXd::Zero(6);
-	VectorXd acc_current = VectorXd::Zero(6);
-	g_general_6s->move_joint_interp(
-		targetACS, originACS, vel_current, acc_current,
-		0.001, 10.0, 10.0, 10.0, 10.0,
-		trajectory
-	);
 	return true;
 }
 
-bool append_transform_move(const MatrixXd& targetTrans, std::deque<double>& trajectory, const char* tag) {
-	VectorXd originACS(6);
-	for(int i=0; i<6; i++) {
-		originACS(i) = g_general_6s->getActPositionAngle(i);
+void execute_write_path(const std::vector<PosePoint>& points, double lift_mm)
+{
+	printf("[底层] WRITE 接收点数=%zu，上限=%zu，抬笔高度=%.2f mm。\n",
+		points.size(), MAX_WRITE_POINTS, lift_mm);
+	if (points.empty()) {
+		printf("[底层-拒绝] WRITE 点数为空。\n");
+		return;
 	}
-
-	if (!trajectory.empty() && trajectory.size() >= 6) {
-		for (int i = 0; i < 6; i++) {
-			originACS(i) = trajectory[trajectory.size() - 6 + i];
-		}
+	if (!std::isfinite(lift_mm) || lift_mm < 0 || lift_mm > 200) {
+		printf("[底层-拒绝] WRITE 抬笔高度非法: %.3f。\n", lift_mm);
+		return;
 	}
-
-	VectorXd targetACS(6);
-	targetACS = originACS;
-	g_general_6s->calc_inverse_kin(targetTrans, originACS, targetACS);
-
-	double max_delta = 0.0;
-	for (int i = 0; i < 6; i++) {
-		if (fabs(targetACS(i) - originACS(i)) > max_delta) {
-			max_delta = fabs(targetACS(i) - originACS(i));
-		}
-	}
-	if (max_delta < 0.001) {
-		printf("[底层-拒绝] %s 逆解未产生有效关节目标，目标XYZ: %.3f %.3f %.3f。\n",
-			tag, targetTrans(0, 3), targetTrans(1, 3), targetTrans(2, 3));
-		return false;
-	}
-
-	for (int i = 0; i < 6; i++) {
-		if (fabs(targetACS(i) - originACS(i)) > 45.0) {
-			printf("[底层-拒绝] %s 单段关节变化过大: J%d %.3f -> %.3f。\n",
-				tag, i + 1, originACS(i), targetACS(i));
-			return false;
-		}
-	}
-
-	printf("[底层] %s IK目标关节: %.3f %.3f %.3f %.3f %.3f %.3f。\n",
-		tag, targetACS(0), targetACS(1), targetACS(2), targetACS(3), targetACS(4), targetACS(5));
-
-	VectorXd vel_current = VectorXd::Zero(6);
-	VectorXd acc_current = VectorXd::Zero(6);
-	g_general_6s->move_joint_interp(
-		targetACS, originACS, vel_current, acc_current,
-		0.001, 10.0, 10.0, 10.0, 10.0,
-		trajectory
-	);
-	return true;
-}
-
-VectorXd current_or_queued_tcp(const std::deque<double>& trajectory) {
-	VectorXd originACS(6);
-	for(int i=0; i<6; i++) {
-		originACS(i) = g_general_6s->getActPositionAngle(i);
-	}
-
-	if (!trajectory.empty() && trajectory.size() >= 6) {
-		for (int i = 0; i < 6; i++) {
-			originACS(i) = trajectory[trajectory.size() - 6 + i];
-		}
-	}
-
-	MatrixXd originTrans;
-	g_general_6s->calc_forward_kin(originACS, originTrans);
-	return g_general_6s->tr_2_MCS(originTrans);
-}
-
-VectorXd current_or_queued_acs(const std::deque<double>& trajectory) {
-	VectorXd originACS(6);
-	for(int i=0; i<6; i++) {
-		originACS(i) = g_general_6s->getActPositionAngle(i);
-	}
-
-	if (!trajectory.empty() && trajectory.size() >= 6) {
-		for (int i = 0; i < 6; i++) {
-			originACS(i) = trajectory[trajectory.size() - 6 + i];
-		}
-	}
-	return originACS;
-}
-
-VectorXd dh_zero_tcp_pose() {
-	VectorXd zeroACS = VectorXd::Zero(6);
-	MatrixXd zeroTrans;
-	g_general_6s->calc_forward_kin(zeroACS, zeroTrans);
-	return g_general_6s->tr_2_MCS(zeroTrans);
-}
-
-void execute_cartesian_path(const std::vector<PosePoint>& points) {
-	if (points.empty()) return;
-
-	std::deque<double> new_trajectory;
-	size_t max_points = points.size() > 80 ? 80 : points.size();
-	for (size_t i = 0; i < max_points; i++) {
-		if (fabs(points[i].x) > 1200 || fabs(points[i].y) > 1200 || points[i].z < -100 || points[i].z > 1200) {
-			printf("[底层-拒绝] CARTPATH 航点超出安全范围: %.3f %.3f %.3f。\n", points[i].x, points[i].y, points[i].z);
-			return;
-		}
-		VectorXd target(6);
-		target << points[i].x, points[i].y, points[i].z, points[i].rx, points[i].ry, points[i].rz;
-		size_t before_size = new_trajectory.size();
-		if (!append_pose_move(target, new_trajectory)) {
-			return;
-		}
-		if (new_trajectory.size() == before_size) {
-			printf("[底层-拒绝] CARTPATH 未生成关节插补轨迹，目标TCP: %.3f %.3f %.3f %.3f %.3f %.3f。\n",
-				target(0), target(1), target(2), target(3), target(4), target(5));
-			return;
-		}
-	}
-
-	if (new_trajectory.empty()) {
-		printf("[底层-拒绝] CARTPATH 未生成轨迹，请检查目标点是否可达。\n");
+	if (points.size() > MAX_WRITE_POINTS) {
+		printf("[底层-拒绝] WRITE 点数超限: 接收=%zu，上限=%zu。\n", points.size(), MAX_WRITE_POINTS);
 		return;
 	}
 
-	{
-		std::lock_guard<std::mutex> lock(trajectory_mutex);
-		g_general_6s->set_angle_deque(new_trajectory);
-	}
-	printf("[底层] CARTPATH 已生成轨迹：%zu/%zu 个位姿点，队列长度=%zu。\n",
-		max_points, points.size(), new_trajectory.size());
-}
-
-void execute_teach_xyz_path(const std::vector<PosePoint>& points) {
-	if (points.empty()) return;
-
-	VectorXd zeroACS = VectorXd::Zero(6);
-	MatrixXd zeroTrans;
-	g_general_6s->calc_forward_kin(zeroACS, zeroTrans);
-	VectorXd zeroPose = g_general_6s->tr_2_MCS(zeroTrans);
 	std::deque<double> new_trajectory;
-	size_t max_points = points.size() > 80 ? 80 : points.size();
-	for (size_t i = 0; i < max_points; i++) {
-		if (fabs(points[i].x) > 1200 || fabs(points[i].y) > 1200 || points[i].z < -100 || points[i].z > 1200) {
-			printf("[底层-拒绝] TEACHXYZ 目标超出安全范围: %.3f %.3f %.3f。\n", points[i].x, points[i].y, points[i].z);
+	for (size_t i = 0; i < points.size(); i++) {
+		if (!pose_values_finite(points[i])) {
+			printf("[底层-拒绝] WRITE 第 %zu 点存在非有限数值。\n", i);
 			return;
 		}
-
-		MatrixXd targetTrans = zeroTrans;
-		targetTrans(0, 3) = points[i].x;
-		targetTrans(1, 3) = points[i].y;
-		targetTrans(2, 3) = points[i].z;
-		size_t before_size = new_trajectory.size();
-		if (!append_transform_move(targetTrans, new_trajectory, "TEACHXYZ")) {
-			return;
-		}
-		if (new_trajectory.size() == before_size) {
-			printf("[底层-拒绝] TEACHXYZ 未生成轨迹，目标XYZ: %.3f %.3f %.3f。\n",
-				points[i].x, points[i].y, points[i].z);
-			return;
-		}
-	}
-
-	{
-		std::lock_guard<std::mutex> lock(trajectory_mutex);
-		g_general_6s->set_angle_deque(new_trajectory);
-	}
-	printf("[底层] TEACHXYZ 已用DH零位姿态生成轨迹：%zu/%zu 点，姿态=%.3f %.3f %.3f，队列长度=%zu。\n",
-		max_points, points.size(), zeroPose(3), zeroPose(4), zeroPose(5), new_trajectory.size());
-}
-
-void execute_write_path(const std::vector<PosePoint>& points, double lift_mm) {
-	if (points.empty()) return;
-
-	std::deque<double> new_trajectory;
-	size_t max_points = points.size() > 80 ? 80 : points.size();
-	for (size_t i = 0; i < max_points; i++) {
-		if (fabs(points[i].x) > 1200 || fabs(points[i].y) > 1200 || points[i].z < -100 || points[i].z > 1200) {
+		if (!pose_in_safe_range(points[i])) {
 			printf("[底层-拒绝] WRITE 航点超出安全范围: %.3f %.3f %.3f。\n", points[i].x, points[i].y, points[i].z);
 			return;
 		}
 		VectorXd target(6);
 		target << points[i].x, points[i].y, points[i].z, points[i].rx, points[i].ry, points[i].rz;
-		append_line_move(target, new_trajectory);
+		if (!append_write_move(target, new_trajectory)) {
+			printf("[底层-拒绝] WRITE 第 %zu 点逆解或关节跳变检查失败，队列未写入。\n", i);
+			return;
+		}
+		if (new_trajectory.size() > MAX_TRAJECTORY_QUEUE_VALUES) {
+			printf("[底层-拒绝] WRITE 轨迹队列过长: %zu，上限=%zu，队列未写入。\n",
+				new_trajectory.size(), MAX_TRAJECTORY_QUEUE_VALUES);
+			return;
+		}
 	}
 
-	{
-		std::lock_guard<std::mutex> lock(trajectory_mutex);
-		g_general_6s->set_angle_deque(new_trajectory);
+	g_estop_requested = false;
+	g_general_6s->set_angle_deque(new_trajectory);
+	printf("[底层] WRITE 已接受：接收点数=%zu，队列长度=%zu。\n", points.size(), new_trajectory.size());
+}
+
+void set_gripper(bool closed)
+{
+	set_io_bit(IO_out, GRIPPER_OPEN_IO, closed ? 0 : 1);
+	set_io_bit(IO_out, GRIPPER_CLOSE_IO, closed ? 1 : 0);
+	io_data = pack_io_data(IO_out);
+	IO_OUTPUT_VALID = true;
+	printf("[底层] 夹爪%s指令已写入 IO：open io%d=%d close io%d=%d data=%d。\n",
+		closed ? "夹紧" : "松开",
+		GRIPPER_OPEN_IO, get_io_bit(IO_out, GRIPPER_OPEN_IO),
+		GRIPPER_CLOSE_IO, get_io_bit(IO_out, GRIPPER_CLOSE_IO),
+		io_data);
+}
+
+void set_single_io(int channel, int value)
+{
+	if (channel < 1 || channel > 16) {
+		printf("[底层-拒绝] IO 通道非法: %d，应为 1-16。\n", channel);
+		return;
 	}
-	printf("[底层] 已生成书写轨迹：%zu/%zu 个笛卡尔航点，抬笔高度 %.2f mm，队列长度=%zu。\n",
-		max_points, points.size(), lift_mm, new_trajectory.size());
+	set_io_bit(IO_out, channel, value ? 1 : 0);
+	io_data = pack_io_data(IO_out);
+	IO_OUTPUT_VALID = true;
+	printf("[底层] IOSET io%d=%d data=%d。\n", channel, value ? 1 : 0, io_data);
+}
+
+void clear_all_io()
+{
+	IO_out = io_out();
+	io_data = pack_io_data(IO_out);
+	IO_OUTPUT_VALID = true;
+	printf("[底层] 已清空全部 IO 输出，data=%d。\n", io_data);
 }
 
 // -------------------------------------------------------------
@@ -680,7 +521,6 @@ void cyclic_task() {
 	clock_gettime(CLOCK_TO_USE, &wakeupTime);
 
 	while (1) {
-		cycle_count++;
 		wakeupTime = timespec_add(wakeupTime, cycletime);
 		clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeupTime, NULL);
 		ecrt_master_application_time(master, TIMESPEC2NS(wakeupTime));
@@ -694,17 +534,12 @@ void cyclic_task() {
 		}
 		
 		g_general_6s->set_act_inc(actualInc);   
-		if (NeedPowerOn || PowerStatus) {
-			for (unsigned int i = 0; i < 6; i++) {
-				last_actual_deg[i] = g_general_6s->getActPositionAngle(i);
-			}
-		}
 
 		if (counter) {
 			counter--;
 		} else { 
 			counter = FREQUENCY * 2;
-			for (int i = 0; i < SLAVE_NUM; i++) {
+			for (int i = 0; i < num_; i++) {
 				check_slave_config_states(sc[i], i);
 			}
 
@@ -735,22 +570,23 @@ void cyclic_task() {
 			blink = !blink;
 		}
 
-		/* 消耗轨迹队列发给伺服 */
-		{
-			std::lock_guard<std::mutex> trajectory_lock(trajectory_mutex);
-			if (PowerStatus && !g_general_6s->get_angle_deque().empty()) {
-				for (int i = 0; i < 6; i++) {
-					double target_deg = g_general_6s->get_angle_deque().front();
-					last_target_deg[i] = target_deg;
-					EC_WRITE_S32(domain1_pd + offset.target_position[i], g_general_6s->set_target_pos_to_servo(i));
-				}
-				servo_write_count++;
+		/* 急停后立即锁定当前位置 */
+		if (PowerStatus && g_estop_requested.exchange(false)) {
+			for (int i = 0; i < 6; i++) {
+				EC_WRITE_S32(domain1_pd + offset.target_position[i], actualInc[i]);
 			}
 		}
 
-		if (ENABLE_GRIPPER_IO && IO_OUTPUT_VALID) {
+		/* 消耗轨迹队列发给伺服 */
+		std::array<int, 6> target_inc = {};
+		if (PowerStatus && try_pop_target_pos_set_compat(target_inc)) {
+			for (int i = 0; i < 6; i++) {
+				EC_WRITE_S32(domain1_pd + offset.target_position[i], target_inc[i]);
+			}
+		}
+
+		if (IO_OUTPUT_VALID) {
 			EC_WRITE_U16(domain1_pd + offset.io_out, (uint16_t)io_data);
-			IO_ISCHANGE = false;
 		}
 
 		if (sync_ref_counter) {
@@ -764,7 +600,6 @@ void cyclic_task() {
 
 		ecrt_domain_queue(domain1);
 		ecrt_master_send(master);
-		write_debug_status();
 	}
 }
 
@@ -780,7 +615,7 @@ int StartEC() {
 	if (!domain1) return -1;
 
 	for (int i = 0; i < SLAVE_NUM; i++) {
-		if (i < AXIS_NUM) {
+		if (i < num_) {
 			if (!(sc[i] = ecrt_master_slave_config(master, a[i], p[i], VID_PID))) return -1;
 			if (ecrt_slave_config_pdos(sc[i], EC_END, device_syncs)) return -1;
 		} else {
@@ -790,7 +625,7 @@ int StartEC() {
 	}
 
 	if (ecrt_domain_reg_pdo_entry_list(domain1, domain1_regs)) exit(EXIT_FAILURE);
-	for (int i = 0; i < AXIS_NUM; i++) ecrt_slave_config_dc(sc[i], 0x0300, PERIOD_NS, PERIOD_NS / 2, 0, 0);
+	for (int i = 0; i < num_; i++) ecrt_slave_config_dc(sc[i], 0x0300, PERIOD_NS, PERIOD_NS / 2, 0, 0);
 
 	if (ecrt_master_activate(master)) return -1;
 	if (!(domain1_pd = ecrt_domain_data(domain1))) return -1;
@@ -800,6 +635,7 @@ int StartEC() {
 	sched_setscheduler(0, SCHED_FIFO, &param);
 
 	cyclic_task();
+	return 0;
 }
 
 // ======================= 新增：机器人参数初始化 =======================
@@ -828,8 +664,8 @@ void init_robot_params() {
 	motor_pa.encoder.singleTurnEncoder[2] = 66.478271; motor_pa.encoder.singleTurnEncoder[3] = 48.540344;
 	motor_pa.encoder.singleTurnEncoder[4] = 225.788269; motor_pa.encoder.singleTurnEncoder[5] = 143.937378;
 
-	motor_pa.encoder.direction[0] = -1; motor_pa.encoder.direction[1] = 1; motor_pa.encoder.direction[2] = -1;
-	motor_pa.encoder.direction[3] = 1; motor_pa.encoder.direction[4] = 1; motor_pa.encoder.direction[5] = 1;
+	motor_pa.encoder.direction[0] = -1; motor_pa.encoder.direction[1] = 1; motor_pa.encoder.direction[2] = 1;
+	motor_pa.encoder.direction[3] = -1; motor_pa.encoder.direction[4] = 1; motor_pa.encoder.direction[5] = -1;
 
 	motor_pa.RatedVel_rpm[0] = 450; motor_pa.RatedVel_rpm[1] = 350; motor_pa.RatedVel_rpm[2] = 450;
 	motor_pa.RatedVel_rpm[3] = 350; motor_pa.RatedVel_rpm[4] = 450; motor_pa.RatedVel_rpm[5] = 450;
@@ -853,43 +689,67 @@ void command_server_thread() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in address;
     int opt = 1;
+    if (server_fd < 0) {
+        perror("socket");
+        return;
+    }
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(9000);
-    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
-    listen(server_fd, 3);
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("bind");
+        close(server_fd);
+        return;
+    }
+    if (listen(server_fd, 3) < 0) {
+        perror("listen");
+        close(server_fd);
+        return;
+    }
     
     printf("[网络] 指令接收端口 9000 启动监听...\n");
     
     while(true) {
         int new_socket = accept(server_fd, NULL, NULL);
+        if (new_socket < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("accept");
+            continue;
+        }
         char buffer[4096] = {0};
         std::string msg;
-        ssize_t nread = 0;
-        while ((nread = read(new_socket, buffer, sizeof(buffer))) > 0) {
-            msg.append(buffer, nread);
-            if (nread < (ssize_t)sizeof(buffer)) break;
+        ssize_t read_bytes = 0;
+        while ((read_bytes = read(new_socket, buffer, sizeof(buffer))) > 0) {
+            msg.append(buffer, read_bytes);
+            if (read_bytes < (ssize_t)sizeof(buffer)) {
+                break;
+            }
+        }
+        if (msg.empty()) {
+            close(new_socket);
+            continue;
         }
         
         std::stringstream ss(msg);
         std::string cmd_type;
-        ss >> cmd_type;
-        last_command = msg.substr(0, 120);
-        printf("[网络] 收到指令: %.120s\n", msg.c_str());
+        if (!(ss >> cmd_type)) {
+            close(new_socket);
+            continue;
+        }
         
         if (cmd_type == "MOVEJ") {
-            VectorXd target(6);
-            for(int i=0; i<6; i++) {
-                double val; ss >> val; target(i) = val;
+            VectorXd target;
+            if (!parse_vector6(ss, target)) {
+                printf("[底层-警告] MOVEJ 参数错误: %s\n", msg.c_str());
+                close(new_socket);
+                continue;
             }
             
-            // 获取当前实际角度
-            VectorXd origin(6);
-            for(int i=0; i<6; i++) {
-                origin(i) = g_general_6s->getActPositionAngle(i);
-            }
+            VectorXd origin = get_current_joint_angles();
             
             VectorXd vel_current = VectorXd::Zero(6);
             VectorXd acc_current = VectorXd::Zero(6);
@@ -907,101 +767,52 @@ void command_server_thread() {
                 Ts, velPerc, accPerc, decPerc, jerkPerc, new_trajectory
             );
             
-            // 写入底层运动队列，EtherCAT 循环会自动消费它
-            {
-                std::lock_guard<std::mutex> lock(trajectory_mutex);
-                g_general_6s->set_angle_deque(new_trajectory);
-            }
-            printf("[底层] MOVEJ 插补完成，轨迹队列长度=%zu，PowerStatus=%d。\n", new_trajectory.size(), PowerStatus);
+            g_estop_requested = false;
+            g_general_6s->set_angle_deque(new_trajectory);
+            printf("[底层] 已收到网页发来的 MOVEJ 指令并开始执行。\n");
         }
         else if (cmd_type == "MOVEL") {
-            VectorXd target(6);
-            for(int i=0; i<6; i++) {
-                double val; ss >> val; target(i) = val;
+            VectorXd target;
+            if (!parse_vector6(ss, target)) {
+                printf("[底层-警告] MOVEL 参数错误: %s\n", msg.c_str());
+                close(new_socket);
+                continue;
             }
 
-            VectorXd originACS(6);
-            for(int i=0; i<6; i++) {
-                originACS(i) = g_general_6s->getActPositionAngle(i);
-            }
+            VectorXd origin_joints = get_current_joint_angles();
+            VectorXd origin_tcp = calc_tcp_pose_from_joints(origin_joints);
 
-            MatrixXd originTrans;
-            g_general_6s->calc_forward_kin(originACS, originTrans);
-            VectorXd originMCS = g_general_6s->tr_2_MCS(originTrans);
-
-            VectorXd targetACS(6);
-            targetACS = originACS;
-            g_general_6s->calc_inverse_kin(g_general_6s->rpy_2_tr(target), originACS, targetACS);
-            printf("[底层] MOVEL 目标TCP: %.3f %.3f %.3f %.3f %.3f %.3f -> IK关节: %.3f %.3f %.3f %.3f %.3f %.3f。\n",
-                target(0), target(1), target(2), target(3), target(4), target(5),
-                targetACS(0), targetACS(1), targetACS(2), targetACS(3), targetACS(4), targetACS(5));
-
-            VectorXd vel_current = VectorXd::Zero(6);
-            VectorXd acc_current = VectorXd::Zero(6);
             std::deque<double> new_trajectory;
-            g_general_6s->move_joint_interp(
-                targetACS, originACS, vel_current, acc_current,
-                0.001, 10.0, 10.0, 10.0, 10.0,
-                new_trajectory
+            double Ts = 0.001;
+            double velCurrent = 0.0;
+            double accCurrent = 0.0;
+            double velPerc = 10.0;
+            double accPerc = 10.0;
+            double decPerc = 10.0;
+            double jerkPerc = 10.0;
+
+            g_general_6s->move_line_interp(
+                target, origin_tcp, origin_joints, velCurrent, accCurrent,
+                Ts, velPerc, accPerc, decPerc, jerkPerc, new_trajectory
             );
 
-            {
-                std::lock_guard<std::mutex> lock(trajectory_mutex);
-                g_general_6s->set_angle_deque(new_trajectory);
-            }
-            printf("[底层] MOVEL 插补完成，轨迹队列长度=%zu，PowerStatus=%d。\n", new_trajectory.size(), PowerStatus);
+            g_estop_requested = false;
+            g_general_6s->set_angle_deque(new_trajectory);
+            printf("[底层] 已收到网页发来的 MOVEL 指令并开始执行。\n");
         }
         else if (cmd_type == "WRITE") {
             int count = 0;
             double lift_mm = 10.0;
-            ss >> count >> lift_mm;
-
-            std::vector<PosePoint> points;
-            points.reserve(count > 0 ? count : 0);
-            for (int i = 0; i < count; i++) {
-                PosePoint point;
-                ss >> point.x >> point.y >> point.z >> point.rx >> point.ry >> point.rz;
-                if (!ss.fail()) points.push_back(point);
+            if (!(ss >> count >> lift_mm)) {
+                printf("[底层-拒绝] WRITE 指令头解析失败，应为: WRITE count lift x y z rx ry rz ...。\n");
+                close(new_socket);
+                continue;
             }
 
-            execute_write_path(points, lift_mm);
-        }
-        else if (cmd_type == "CARTPATH") {
-            int count = 0;
-            ss >> count;
-
             std::vector<PosePoint> points;
-            points.reserve(count > 0 ? count : 0);
-            for (int i = 0; i < count; i++) {
-                PosePoint point;
-                ss >> point.x >> point.y >> point.z >> point.rx >> point.ry >> point.rz;
-                if (!ss.fail()) points.push_back(point);
+            if (parse_pose_points(ss, count, MAX_WRITE_POINTS, points, "WRITE")) {
+                execute_write_path(points, lift_mm);
             }
-
-            execute_cartesian_path(points);
-        }
-        else if (cmd_type == "TEACHXYZ") {
-            PosePoint point;
-            ss >> point.x >> point.y >> point.z;
-
-            std::vector<PosePoint> points;
-            if (!ss.fail()) points.push_back(point);
-
-            execute_teach_xyz_path(points);
-        }
-        else if (cmd_type == "TEACHPATH") {
-            int count = 0;
-            ss >> count;
-
-            std::vector<PosePoint> points;
-            points.reserve(count > 0 ? count : 0);
-            for (int i = 0; i < count; i++) {
-                PosePoint point;
-                ss >> point.x >> point.y >> point.z;
-                if (!ss.fail()) points.push_back(point);
-            }
-
-            execute_teach_xyz_path(points);
         }
         else if (cmd_type == "GRIPPER") {
             std::string action;
@@ -1019,13 +830,11 @@ void command_server_thread() {
         }
         // ===== 新增：处理网页发来的急停指令 =====
         else if (cmd_type == "ESTOP") {
-            // 构造一个空的队列传进去，直接清空正在执行的轨迹
-            std::deque<double> empty_trajectory;
-            {
-                std::lock_guard<std::mutex> lock(trajectory_mutex);
-                g_general_6s->set_angle_deque(empty_trajectory);
-            }
+            clear_angle_deque_compat();
+            g_estop_requested = true;
             printf("\n[底层-警告] 收到 ESTOP 急停指令！已清空运动队列，机器人紧急刹车！\n\n");
+        } else {
+            printf("[底层-警告] 未知指令: %s\n", msg.c_str());
         }
         
         close(new_socket);
@@ -1036,43 +845,50 @@ void state_server_thread() {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in address;
     int opt = 1;
+    if (server_fd < 0) {
+        perror("socket");
+        return;
+    }
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(9001);
-    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
-    listen(server_fd, 3);
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+        perror("bind");
+        close(server_fd);
+        return;
+    }
+    if (listen(server_fd, 3) < 0) {
+        perror("listen");
+        close(server_fd);
+        return;
+    }
     
     printf("[网络] 状态推送端口 9001 启动监听...\n");
     
     while(true) {
         int client_socket = accept(server_fd, NULL, NULL);
+        if (client_socket < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("accept");
+            continue;
+        }
         printf("[网络] Python 桥接程序已连接至状态端口。\n");
         
         while(true) {
-            VectorXd current_joints(6);
+            VectorXd current_joints = get_current_joint_angles();
+            VectorXd current_tcp = calc_tcp_pose_from_joints(current_joints);
             std::stringstream status_ss;
             
             for(int i=0; i<6; i++) {
-                double j_val = g_general_6s->getActPositionAngle(i);
-                current_joints(i) = j_val;
-                status_ss << j_val << " ";
+                status_ss << current_joints(i) << " ";
             }
-            
-            MatrixXd trans_matrix;
-            g_general_6s->calc_forward_kin(current_joints, trans_matrix);
-            
-            // D-H 参数已经以 mm 为单位配置，这里不能再乘 1000。
-            VectorXd tcp_pose = g_general_6s->tr_2_MCS(trans_matrix);
-            double x = tcp_pose(0);
-            double y = tcp_pose(1);
-            double z = tcp_pose(2);
-            double rx = tcp_pose(3);
-            double ry = tcp_pose(4);
-            double rz = tcp_pose(5);
-            
-            status_ss << x << " " << y << " " << z << " " << rx << " " << ry << " " << rz << "\n";
+
+            status_ss << current_tcp(0) << " " << current_tcp(1) << " " << current_tcp(2) << " "
+                      << current_tcp(3) << " " << current_tcp(4) << " " << current_tcp(5) << "\n";
             std::string msg = status_ss.str();
             
             if (send(client_socket, msg.c_str(), msg.length(), MSG_NOSIGNAL) < 0) break;

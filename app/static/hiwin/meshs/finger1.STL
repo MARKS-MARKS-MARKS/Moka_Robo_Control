@@ -1,0 +1,30 @@
+solid finger1
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 0.005 0 0
+      vertex 0 0.015 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0.005 0 0
+      vertex 0.005 0.015 0
+      vertex 0 0.015 0
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0.03
+      vertex 0 0.015 0.03
+      vertex 0.005 0 0.03
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0.005 0 0.03
+      vertex 0 0.015 0.03
+      vertex 0.005 0.015 0.03
+    endloop
+  endfacet
+endsolid finger1

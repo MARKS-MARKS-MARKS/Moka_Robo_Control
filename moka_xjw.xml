@@ -1,0 +1,580 @@
+<?xml version="1.0" ?>
+<EtherCATInfoList>
+  <EtherCATInfo>
+    <!-- Slave 0 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V0.05</Type>
+          <Name><![CDATA[RA1E_V0.05]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name>The 1st RPDO Mapping</Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6040_ControlWord</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H607A_TargetPosition  </Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B8_TouchProbeFunction</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name>The 1st TPDO Mapping</Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6041_Statusword</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H6064_PositionActualValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B9_TouchProbeStatus</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BA_TouchProbePos1PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BC_TouchProbePos2PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H603F_ErrorCode</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60FD_DigitalInputs</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+  <EtherCATInfo>
+    <!-- Slave 1 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V0.05</Type>
+          <Name><![CDATA[RA1E_V0.05]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name>The 1st RPDO Mapping</Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6040_ControlWord</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H607A_TargetPosition  </Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B8_TouchProbeFunction</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name>The 1st TPDO Mapping</Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6041_Statusword</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H6064_PositionActualValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B9_TouchProbeStatus</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BA_TouchProbePos1PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BC_TouchProbePos2PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H603F_ErrorCode</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60FD_DigitalInputs</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+  <EtherCATInfo>
+    <!-- Slave 2 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V0.05</Type>
+          <Name><![CDATA[RA1E_V0.05]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name>The 1st RPDO Mapping</Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6040_ControlWord</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H607A_TargetPosition  </Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B8_TouchProbeFunction</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name>The 1st TPDO Mapping</Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H6041_Statusword</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H6064_PositionActualValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H60B9_TouchProbeStatus</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BA_TouchProbePos1PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60BC_TouchProbePos2PosValue</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name>H603F_ErrorCode</Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name>H60FD_DigitalInputs</Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+  <EtherCATInfo>
+    <!-- Slave 3 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V1.10</Type>
+          <Name><![CDATA[RA1E_V1.10]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+  <EtherCATInfo>
+    <!-- Slave 4 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V1.10</Type>
+          <Name><![CDATA[RA1E_V1.10]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+  <EtherCATInfo>
+    <!-- Slave 5 -->
+    <Vendor>
+      <Id>2338</Id>
+    </Vendor>
+    <Descriptions>
+      <Devices>
+        <Device>
+          <Type ProductCode="#x00000a01" RevisionNo="#x00000001">RA1E_V1.10</Type>
+          <Name><![CDATA[RA1E_V1.10]]></Name>
+          <Sm Enable="1" StartAddress="#x1000" ControlByte="#x26" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1400" ControlByte="#x22" DefaultSize="128" />
+          <Sm Enable="1" StartAddress="#x1800" ControlByte="#x64" DefaultSize="8" />
+          <Sm Enable="1" StartAddress="#x1c00" ControlByte="#x20" DefaultSize="22" />
+          <RxPdo Sm="2" Fixed="1" Mandatory="1">
+            <Index>#x1600</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6040</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x607a</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b8</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+          </RxPdo>
+          <TxPdo Sm="3" Fixed="1" Mandatory="1">
+            <Index>#x1a00</Index>
+            <Name></Name>
+            <Entry>
+              <Index>#x6041</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x6064</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60b9</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60ba</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60bc</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x603f</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>16</BitLen>
+              <Name></Name>
+              <DataType>UINT16</DataType>
+            </Entry>
+            <Entry>
+              <Index>#x60fd</Index>
+              <SubIndex>0</SubIndex>
+              <BitLen>32</BitLen>
+              <Name></Name>
+              <DataType>UINT32</DataType>
+            </Entry>
+          </TxPdo>
+        </Device>
+      </Devices>
+    </Descriptions>
+  </EtherCATInfo>
+</EtherCATInfoList>
+

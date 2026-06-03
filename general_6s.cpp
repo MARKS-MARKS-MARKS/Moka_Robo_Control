@@ -1,7 +1,23 @@
 #include "general_6s.h"
 #include <iostream>
+#include <cmath>
 
 General_6S* g_general_6s = nullptr;
+
+namespace {
+double unwrap_to_nearest_deg(double angle_deg, double reference_deg)
+{
+	while (angle_deg - reference_deg > 180.0)
+	{
+		angle_deg -= 360.0;
+	}
+	while (angle_deg - reference_deg < -180.0)
+	{
+		angle_deg += 360.0;
+	}
+	return angle_deg;
+}
+}
 
 VectorXd General_6S::tr_2_MCS(MatrixXd m)  //转移矩阵转直角坐标
 {
@@ -433,115 +449,76 @@ void General_6S::move_joint_interp(const VectorXd &targetPoint,
 }
 void General_6S::move_line_interp(const VectorXd &targetPoint,
 		const VectorXd &originPoint, const VectorXd &originACS, double velCurrent, double accCurrent,
-		double Ts, double maxVelper, double maxAccper, double maxDecelper,
-		double maxJerk, std::deque<double> &deque)
+		double Ts, double velPerc, double accPerc, double decPerc,
+		double jerkPerc, std::deque<double> &deque)
 {
 	int n = 6;
 	int mcsDimension = 6;
-
-	int axisNum;
 	VectorXd targetACS(n);
-
-	bool moveDirection = true;
+	VectorXd jointOffset(n);
 
 	//	若有位置命令未执行完毕，等待各轴进入空闲状态
 	//	MC_WaitIsFree();
-
-	//计算路径长度
-	double displacement = sqrt(pow((targetPoint[0]-originPoint[0]), 2)+pow(
-			(targetPoint[1]-originPoint[1]), 2)+pow((targetPoint[2]
-			-originPoint[2]), 2));
 	std::deque<double> rlst;
-    std::deque<double> rlstMcs;
-    std::deque<double> rlstAcs;
-    double maxVelAcs,maxAccAcs,maxDecelAcs,displacementAcs;
 
-	if (displacement > 0.2)
+	calc_inverse_kin(rpy_2_tr(targetPoint), originACS, targetACS);
+	jointOffset = targetACS - originACS;
+
+	double velRatio = velPerc / 100.0;
+	double accRatio = accPerc / 100.0;
+	double decRatio = decPerc / 100.0;
+	double tAcc = 0.0;
+	double tDec = 0.0;
+	double T = 0.0;
+
+	for (int ai = 0; ai != n; ++ai)
 	{
-		
-		std::cout<< "display>0.2**********************************************";
-	        if (sqrt(maxAccper * displacement) < (0.98 * maxVelper))
-	        {
-	            for (int i=0;i<1000;i++)
-	            {
-	                maxVelper = 0.98 * maxVelper;
-	                maxAccper = 0.98 * maxAccper;
-	                maxDecelper = 0.98 * maxDecelper;
-	                if (sqrt(maxAccper * displacement) >= maxVelper)
-	                {
-	                    break;
-	                }
-	            }
-	        }
-	    calc_Interp_5_1_5(0, 1, Ts, maxVelper/displacement, maxAccper/displacement,
-	            maxDecelper/displacement, maxJerk/displacement, rlstMcs, velCurrent / displacement, accCurrent / displacement);
-	    calc_inverse_kin(rpy_2_tr(targetPoint),originACS,targetACS);
-        displacementAcs = fabs(targetACS[0] - originACS[0]);
-        axisNum = 0;
-        for (int ai=1; ai!=n; ++ai) //2-n轴
-        {
-            if (displacementAcs < fabs(targetACS[ai] - originACS[ai]))
-            {
-                displacementAcs = fabs(targetACS[ai] - originACS[ai]);
-                axisNum = ai;
-            }
-        }
+		if (fabs(jointOffset[ai]) <= 0.1)
+		{
+			continue;
+		}
 
-        if (displacementAcs < 0.0001 )
-        {
-            return;
-        }
-        else
-        {
-			
-            maxVelAcs = motor_param.RatedVel_rpm[axisNum];
-            maxAccAcs = motor_param.maxAcc[axisNum] * motor_param.RatedVel_rpm[axisNum];
-            maxDecelAcs = motor_param.maxDecel[axisNum] * motor_param.RatedVel_rpm[axisNum];
+		double ratedVel = motor_param.RatedVel[ai];
+		double axisAcc = accRatio * fabs(motor_param.maxAcc[ai]) * ratedVel;
+		double axisDec = decRatio * fabs(motor_param.maxDecel[ai]);
 
-            if (sqrt(maxAccAcs * displacementAcs) < maxVelAcs)
-            {
-                maxVelAcs = sqrt(maxAccAcs * displacementAcs);
-            }
-        }
-        calc_Interp_5_1_5(0, 1, Ts, maxVelAcs/displacementAcs, maxAccAcs/displacementAcs,
-                maxDecelAcs/displacementAcs, maxJerk/displacementAcs, rlstAcs, velCurrent / displacement, accCurrent / displacement );
-        rlst = rlstAcs;
+		if (ratedVel <= 0.0 || axisAcc <= 0.0 || axisDec <= 0.0 || velRatio <= 0.0)
+		{
+			continue;
+		}
+
+		double axisTAcc = velRatio / (accRatio * fabs(motor_param.maxAcc[ai]));
+		double axisTDec = velRatio / (decRatio * fabs(motor_param.maxDecel[ai]));
+		double axisT = fabs(jointOffset[ai]) / (velRatio * ratedVel);
+
+		if (axisTAcc > tAcc)
+		{
+			tAcc = axisTAcc;
+		}
+		if (axisTDec > tDec)
+		{
+			tDec = axisTDec;
+		}
+		if (axisT > T)
+		{
+			T = axisT;
+		}
 	}
-	else
+
+	if (T <= 0.0)
 	{
-		std::cout<< "display<         0.2**********************************************";
-	    calc_inverse_kin(rpy_2_tr(targetPoint),originACS,targetACS);
-		displacement = fabs(targetACS[0] - originACS[0]);
-		axisNum = 0;
-		for (int ai=1; ai!=n; ++ai) //2-n轴
-		{
-			if (displacement < fabs(targetACS[ai] - originACS[ai]))
-			{
-				displacement = fabs(targetACS[ai] - originACS[ai]);
-				axisNum = ai;
-			}
-		}
-		if (displacement < 0.0001)
-		{
-			return;
-		}
-		else
-		{
-			maxVelper = maxVelper/decare.maxvel*(motor_param.RatedVel[axisNum]);
-			maxAccper = maxAccper/(decare.maxacc * decare.maxvel) * (motor_param.maxAcc[axisNum] * motor_param.RatedVel[axisNum]);
-			maxDecelper = maxDecelper/(decare.maxdec * decare.maxvel)*(motor_param.maxDecel[axisNum] * motor_param.DeRatedVel[axisNum]);
-			if (sqrt(maxAccper * displacement) < maxVelper)
-			{
-				maxVelper = sqrt(maxAccper * displacement);
-			}
-			if (maxAccper / maxVelper > 2)
-			{
-				maxAccper = 2 * maxVelper;
-				maxDecelper = 2 * maxVelper;
-			}
-		}
-	    calc_Interp_5_1_5(0, 1, Ts, maxVelper/displacement, maxAccper/displacement,
-	            maxDecelper/displacement, maxJerk/displacement, rlst, velCurrent / displacement, accCurrent / displacement);
+		return;
+	}
+
+	double tf = T + tAcc / 2.0 + tDec / 2.0;
+	size_t totalSteps = static_cast<size_t>(tf / Ts);
+	if (totalSteps == 0)
+	{
+		totalSteps = 1;
+	}
+	for (size_t i = 0; i <= totalSteps; ++i)
+	{
+		rlst.push_back(static_cast<double>(i) / static_cast<double>(totalSteps));
 	}
 
 	//球面线性插补
@@ -558,32 +535,10 @@ void General_6S::move_line_interp(const VectorXd &targetPoint,
 	Quaternion<double> qr;
 	Quaternion<double> qTarget(mTarget);
 	Quaternion<double> qOrigin(mOrigin);
-
-	for(int i = 0; i < 11; i++)
-	{
-	    double r= i / 10.0;
-	    qr = qOrigin.slerp(r, qTarget);
-	    pr = pOrigin*(1-r) + r*pTarget;
-	    Tr << qr.toRotationMatrix(), pr, MatrixXd::Zero(1, 3), 1;
-	    posr.head(6) <<  tr_2_MCS(Tr);
-        if (i == 0)
-        {
-            pLast=originACS;
-        }
-	    calc_inverse_kin(rpy_2_tr(posr),pLast,posACS);
-	    pLast = posACS;
-	}
 	for (std::deque<double>::iterator rit = rlst.begin(); rit != rlst.end(); ++rit)
 	{
 		double r=*rit;
-		if (moveDirection)
-		{
-		    qr = qOrigin.slerp(r, qTarget);
-		}
-		else
-		{
-		    qr = qOrigin.slerpLongWay(r, qTarget);
-		}
+		qr = qOrigin.slerp(r, qTarget);
 		pr = pOrigin*(1-r) + r*pTarget;
 		Tr << qr.toRotationMatrix(), pr, MatrixXd::Zero(1, 3), 1;
 
@@ -594,6 +549,11 @@ void General_6S::move_line_interp(const VectorXd &targetPoint,
 			pLast=originACS;
 		}
 	    calc_inverse_kin(rpy_2_tr(posr),pLast,posACS);
+
+		for (int ai = 0; ai != n; ++ai)
+		{
+			posACS[ai] = unwrap_to_nearest_deg(posACS[ai], pLast[ai]);
+		}
 
 	    for (int ai=0; ai!=n; ++ai) //1-n轴
 	    {
@@ -738,6 +698,4 @@ void General_6S::calc_Interp_5_1_5(double q0, double q1, double Ts,
 	}
 	return;
 }
-
-
 

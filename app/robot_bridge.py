@@ -1,62 +1,96 @@
+import copy
+import os
 import socket
 import threading
 import time
-import copy
+from typing import List
 
-ROBOT_IP = "127.0.0.1"
-CMD_PORT = 9000
-STATE_PORT = 9001
+ROBOT_IP = os.getenv("ROBOT_IP", "127.0.0.1")
+CMD_PORT = int(os.getenv("ROBOT_CMD_PORT", "9000"))
+STATE_PORT = int(os.getenv("ROBOT_STATE_PORT", "9001"))
 
-# 仅保留纯粹的 6 轴数据结构
 robot_state = {
     "joints": [0.0] * 6,
-    "tcp": [0.0] * 6
+    "tcp": [0.0] * 6,
+    "bridge_connected": False,
+    "updated_at": 0.0,
 }
 _state_lock = threading.Lock()
+_thread_started = False
+
+
+def _set_bridge_connected(connected: bool):
+    with _state_lock:
+        robot_state["bridge_connected"] = connected
+        if connected:
+            robot_state["updated_at"] = time.time()
+
 
 def send_command(cmd: str):
-    """ 将指令通过 TCP 发送给 C++ 控制台 """
-    last_error = None
-    for attempt in range(3):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(1.0)
-                s.connect((ROBOT_IP, CMD_PORT))
-                s.sendall(cmd.encode('utf-8'))
-            print(f"[BRIDGE] -> 已发送底层指令: {cmd}")
-            return True
-        except Exception as e:
-            last_error = e
-            time.sleep(0.05)
-    print(f"[BRIDGE] 命令发送失败: {last_error}")
-    return False
+    try:
+        with socket.create_connection((ROBOT_IP, CMD_PORT), timeout=1.0) as sock:
+            sock.sendall(cmd.encode("utf-8"))
+        print(f"[BRIDGE] sent command: {cmd}")
+    except Exception as exc:
+        print(f"[BRIDGE] failed to send command: {exc}")
+
+
+def _apply_state_values(values: List[float]):
+    if len(values) != 12:
+        return
+
+    with _state_lock:
+        robot_state["joints"] = values[:6]
+        robot_state["tcp"] = values[6:12]
+        robot_state["bridge_connected"] = True
+        robot_state["updated_at"] = time.time()
+
+
+def _apply_state_line(line: str):
+    try:
+        values = [float(item) for item in line.split()]
+    except ValueError:
+        return
+
+    _apply_state_values(values)
+
 
 def _state_loop():
-    """ 持续监听 C++ 发来的状态数据 """
     while True:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(2.0)
-                s.connect((ROBOT_IP, STATE_PORT))
-                print("[BRIDGE] 成功连接到底层状态端口 9001")
-                
+            with socket.create_connection((ROBOT_IP, STATE_PORT), timeout=2.0) as sock:
+                sock.settimeout(2.0)
+                _set_bridge_connected(True)
+                print(f"[BRIDGE] connected to state port {STATE_PORT}")
+
+                recv_buffer = ""
                 while True:
-                    data = s.recv(1024).decode('utf-8').strip()
-                    if not data: break 
-                    
-                    vals = list(map(float, data.split()))
-                    # C++ 那边回传的是 6个关节角 + 6个位姿 = 12个数据
-                    if len(vals) == 12:
-                        with _state_lock:
-                            robot_state["joints"] = vals[0:6]
-                            robot_state["tcp"] = vals[6:12]
-                    time.sleep(0.02)
-        except Exception as e:
+                    chunk = sock.recv(1024)
+                    if not chunk:
+                        raise ConnectionError("state connection closed")
+
+                    recv_buffer += chunk.decode("utf-8", errors="ignore")
+                    while "\n" in recv_buffer:
+                        line, recv_buffer = recv_buffer.split("\n", 1)
+                        line = line.strip()
+                        if line:
+                            _apply_state_line(line)
+        except Exception as exc:
+            _set_bridge_connected(False)
+            print(f"[BRIDGE] state loop error, retry in 1s: {exc}")
             time.sleep(1.0)
 
+
 def start_state_thread():
-    t = threading.Thread(target=_state_loop, daemon=True)
-    t.start()
+    global _thread_started
+
+    if _thread_started:
+        return
+
+    thread = threading.Thread(target=_state_loop, daemon=True)
+    thread.start()
+    _thread_started = True
+
 
 def get_robot_state():
     with _state_lock:

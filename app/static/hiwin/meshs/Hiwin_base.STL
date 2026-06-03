@@ -1,0 +1,30 @@
+solid hiwin_base
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 0.02 0 0
+      vertex 0 0.02 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0.02 0 0
+      vertex 0.02 0.02 0
+      vertex 0 0.02 0
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0 0 0.02
+      vertex 0 0.02 0.02
+      vertex 0.02 0 0.02
+    endloop
+  endfacet
+  facet normal 0 0 -1
+    outer loop
+      vertex 0.02 0 0.02
+      vertex 0 0.02 0.02
+      vertex 0.02 0.02 0.02
+    endloop
+  endfacet
+endsolid hiwin_base
