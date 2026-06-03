@@ -391,6 +391,29 @@
                 </div>
 
                 <div class="panel rounded-[24px] p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="text-sm font-black tracking-[0.22em] text-emerald-200">TCP 示教再现</h2>
+                        <span id="teach-count" class="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-200">0 点</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">夹爪</span><span id="teach-gripper-state" class="tcp-value text-sm">松开</span></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">备用ms</span><input id="teach-delay" type="number" class="coord-input" value="2500" min="300" max="60000" step="100"></div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="recordTeachPoint()" class="mt-3 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/20">记录当前作业点</button>
+                        <button onclick="moveLastTeachPoint()" class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">移动到最后点</button>
+                        <button onclick="replayTeachPath()" class="mt-3 rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">串联再现</button>
+                        <button onclick="removeLastTeachPoint()" class="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">删除最后点</button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="saveTeachPath()" class="mt-3 rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">保存示教链</button>
+                        <button onclick="loadTeachPath(true)" class="mt-3 rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">读取示教链</button>
+                    </div>
+                    <button onclick="clearTeachPoints()" class="mt-3 w-full rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">清空作业点</button>
+                    <div id="teach-list" class="mt-4 rounded-2xl border border-emerald-300/30 bg-slate-950/65 p-5 text-xs text-slate-300">暂无作业点</div>
+                </div>
+
+                <div class="panel rounded-[24px] p-5">
                     <h2 class="mb-4 text-sm font-black tracking-[0.22em] text-cyan-200">书写与夹爪</h2>
                     <div class="input-row"><span class="w-16 text-xs text-slate-400">文字</span><input id="write-text" class="coord-input" value="永" maxlength="8"></div>
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -431,6 +454,13 @@
         let ws = null;
         let robotPoseUpdater = null;
         let tcpInputsSyncedFromStatus = false;
+        const GRIPPER_CLOSED_PAYLOAD = false;
+        const TEACH_STORAGE_KEY = "moka_tcp_teach_path_v1";
+        const TEACH_IDLE_POLL_MS = 2000;
+        const TEACH_IDLE_JOINT_EPS_DEG = 0.05;
+        let currentUiGripperClosed = false;
+        let teachReplayBusy = false;
+        let teachPoints = [];
         let latestStatus = {
             joints: [0, 0, 0, 0, 0, 0],
             tcp: [0, 0, 0, 0, 0, 0],
@@ -590,6 +620,356 @@
             const target = ["x", "y", "z", "rx", "ry", "rz"].map((key) => parseNumber(`in-${key}`));
             ws.send(JSON.stringify({ type: "movel_cart", target }));
             showToast("空间运动指令已发送", "success");
+        };
+
+        const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+        const gripperPayloadFromUiState = (closed) => (
+            closed ? GRIPPER_CLOSED_PAYLOAD : !GRIPPER_CLOSED_PAYLOAD
+        );
+
+        const clampTeachDelay = (value, fallback = 2500) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed)
+                ? Math.min(60000, Math.max(300, parsed))
+                : fallback;
+        };
+
+        const buildTeachPayload = () => ({
+            version: 1,
+            defaultDelayMs: getTeachDelayMs(),
+            points: teachPoints,
+            savedAt: Date.now(),
+        });
+
+        const getTeachDelayMs = () => (
+            clampTeachDelay(numberValue("teach-delay", 2500))
+        );
+
+        const normalizeTeachPoint = (point) => {
+            if (!point || !Array.isArray(point.pose) || point.pose.length !== 6) return null;
+            const pose = point.pose.map((value) => Number(value));
+            if (pose.some((value) => !Number.isFinite(value))) return null;
+            return {
+                pose,
+                gripperClosed: Boolean(point.gripperClosed),
+                delayMs: clampTeachDelay(point.delayMs),
+                recordedAt: Number(point.recordedAt || Date.now()),
+            };
+        };
+
+        const persistTeachPath = () => {
+            const payload = buildTeachPayload();
+            try {
+                window.localStorage.setItem(TEACH_STORAGE_KEY, JSON.stringify(payload));
+            } catch (error) {
+                showToast("示教链保存失败，请检查浏览器存储权限", "error");
+            }
+            fetch("/teach-path", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            }).catch(() => {
+                // Local storage still keeps the path when the backend is temporarily unavailable.
+            });
+        };
+
+        window.saveTeachPath = async () => {
+            const payload = buildTeachPayload();
+            try {
+                window.localStorage.setItem(TEACH_STORAGE_KEY, JSON.stringify(payload));
+                const resp = await fetch("/teach-path", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) throw new Error(data.detail || "保存失败");
+                showToast(`已保存到 teach_path.txt：${teachPoints.length} 个点`, "success");
+            } catch (error) {
+                showToast(`示教链文件保存失败：${error.message || error}`, "error");
+            }
+        };
+
+        const applyTeachPayload = (payload) => {
+            const loadedPoints = Array.isArray(payload.points)
+                ? payload.points.map(normalizeTeachPoint).filter(Boolean)
+                : [];
+            teachPoints = loadedPoints;
+            if (Number.isFinite(Number(payload.defaultDelayMs))) {
+                const delayInput = document.getElementById("teach-delay");
+                if (delayInput) delayInput.value = clampTeachDelay(payload.defaultDelayMs);
+            }
+            renderTeachPoints();
+        };
+
+        window.loadTeachPath = async (showMessage = true) => {
+            try {
+                const resp = await fetch("/teach-path", { cache: "no-store" });
+                if (resp.ok) {
+                    const payload = await resp.json();
+                    if (payload.ok && payload.data) {
+                        applyTeachPayload(payload.data);
+                        window.localStorage.setItem(TEACH_STORAGE_KEY, JSON.stringify(payload.data));
+                        if (showMessage) showToast(`已从 teach_path.txt 读取：${teachPoints.length} 个点`, "success");
+                        return;
+                    }
+                }
+            } catch (error) {
+                // Fall back to browser storage below.
+            }
+            try {
+                const raw = window.localStorage.getItem(TEACH_STORAGE_KEY);
+                if (!raw) {
+                    if (showMessage) showToast("没有找到已保存的示教链", "info");
+                    return;
+                }
+                const payload = JSON.parse(raw);
+                applyTeachPayload(payload);
+                persistTeachPath();
+                if (showMessage) showToast(`已从浏览器缓存读取：${teachPoints.length} 个点`, "success");
+            } catch (error) {
+                showToast("读取示教链失败，保存数据可能已损坏", "error");
+            }
+        };
+
+        const getCurrentTcpPose = () => {
+            const statusAge = Date.now() / 1000 - latestStatus.updated_at;
+            if (!latestStatus.bridge_connected || !latestStatus.updated_at || statusAge > 2) return null;
+            const tcp = latestStatus.tcp;
+            if (!Array.isArray(tcp) || tcp.length !== 6) return null;
+            const pose = tcp.map((value) => Number(value));
+            if (pose.some((value) => !Number.isFinite(value))) return null;
+            if (Math.abs(pose[0]) > 1200 || Math.abs(pose[1]) > 1200 || pose[2] < -100 || pose[2] > 1200) {
+                return null;
+            }
+            return pose;
+        };
+
+        const formatTeachPose = (pose) => (
+            `X ${pose[0].toFixed(1)}  Y ${pose[1].toFixed(1)}  Z ${pose[2].toFixed(1)}  ` +
+            `RX ${pose[3].toFixed(3)}  RY ${pose[4].toFixed(3)}  RZ ${pose[5].toFixed(3)}`
+        );
+
+        const updateTeachGripperState = () => {
+            const stateNode = document.getElementById("teach-gripper-state");
+            if (!stateNode) return;
+            stateNode.textContent = currentUiGripperClosed ? "夹紧" : "松开";
+            stateNode.style.color = currentUiGripperClosed ? "#fbbf24" : "#67e8f9";
+        };
+
+        const renderTeachPoints = () => {
+            const listNode = document.getElementById("teach-list");
+            const countNode = document.getElementById("teach-count");
+            if (countNode) countNode.textContent = `${teachPoints.length} 点`;
+            if (!listNode) return;
+            listNode.innerHTML = "";
+            if (teachPoints.length === 0) {
+                listNode.textContent = "暂无作业点";
+                return;
+            }
+            teachPoints.forEach((point, index) => {
+                const item = document.createElement("div");
+                item.className = "mb-2 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-4 py-3";
+
+                const title = document.createElement("div");
+                title.className = "mb-2 flex items-center justify-between text-sm font-black text-emerald-100";
+                const name = document.createElement("span");
+                name.textContent = `P${index + 1}`;
+                const gripper = document.createElement("button");
+                gripper.type = "button";
+                gripper.className = "rounded-full border border-cyan-400/10 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-400/20";
+                gripper.textContent = point.gripperClosed ? "夹爪夹紧" : "夹爪松开";
+                gripper.onclick = () => {
+                    teachPoints[index].gripperClosed = !teachPoints[index].gripperClosed;
+                    persistTeachPath();
+                    renderTeachPoints();
+                    showToast(`已切换 P${index + 1} 夹爪状态`, "info");
+                };
+                title.appendChild(name);
+                title.appendChild(gripper);
+
+                const poseGrid = document.createElement("div");
+                poseGrid.className = "grid grid-cols-1 gap-2 sm:grid-cols-2";
+                ["X", "Y", "Z", "RX", "RY", "RZ"].forEach((label, poseIndex) => {
+                    const poseRow = document.createElement("div");
+                    poseRow.className = "input-row";
+                    const poseLabel = document.createElement("span");
+                    poseLabel.className = "w-16 text-xs text-slate-400";
+                    poseLabel.textContent = label;
+                    const poseInput = document.createElement("input");
+                    poseInput.type = "number";
+                    poseInput.className = "coord-input";
+                    poseInput.step = poseIndex < 3 ? "0.1" : "0.001";
+                    poseInput.value = Number(point.pose[poseIndex]).toFixed(poseIndex < 3 ? 1 : 4);
+                    poseInput.onchange = () => {
+                        const value = Number.parseFloat(poseInput.value || "0");
+                        if (!Number.isFinite(value)) {
+                            poseInput.value = Number(teachPoints[index].pose[poseIndex]).toFixed(poseIndex < 3 ? 1 : 4);
+                            showToast(`P${index + 1} ${label} 坐标无效`, "error");
+                            return;
+                        }
+                        teachPoints[index].pose[poseIndex] = value;
+                        poseInput.value = value.toFixed(poseIndex < 3 ? 1 : 4);
+                        persistTeachPath();
+                        showToast(`已更新 P${index + 1} ${label}`, "info");
+                    };
+                    poseRow.appendChild(poseLabel);
+                    poseRow.appendChild(poseInput);
+                    poseGrid.appendChild(poseRow);
+                });
+
+                const delayRow = document.createElement("div");
+                delayRow.className = "mt-2 input-row";
+                const delayLabel = document.createElement("span");
+                delayLabel.className = "w-16 text-xs text-slate-400";
+                delayLabel.textContent = "备用ms";
+                const delayInput = document.createElement("input");
+                delayInput.type = "number";
+                delayInput.className = "coord-input";
+                delayInput.min = "300";
+                delayInput.step = "100";
+                delayInput.value = String(point.delayMs || getTeachDelayMs());
+                delayInput.onchange = () => {
+                    const value = clampTeachDelay(delayInput.value);
+                    teachPoints[index].delayMs = value;
+                    delayInput.value = String(value);
+                    persistTeachPath();
+                    showToast(`已更新 P${index + 1} 等待时间：${value}ms`, "info");
+                };
+                delayRow.appendChild(delayLabel);
+                delayRow.appendChild(delayInput);
+
+                item.appendChild(title);
+                item.appendChild(poseGrid);
+                item.appendChild(delayRow);
+                listNode.appendChild(item);
+            });
+        };
+
+        const sendTcpTarget = (target) => {
+            ws.send(JSON.stringify({ type: "movel_cart", target }));
+        };
+
+        const getFreshJointSnapshot = () => {
+            const statusAge = Date.now() / 1000 - latestStatus.updated_at;
+            if (!latestStatus.bridge_connected || !latestStatus.updated_at || statusAge > 2.5) return null;
+            if (!Array.isArray(latestStatus.joints) || latestStatus.joints.length !== 6) return null;
+            const joints = latestStatus.joints.map((value) => Number(value));
+            return joints.some((value) => !Number.isFinite(value)) ? null : joints;
+        };
+
+        const maxJointDelta = (a, b) => (
+            Math.max(...a.map((value, index) => Math.abs(value - b[index])))
+        );
+
+        const waitUntilRobotIdle = async (pointLabel) => {
+            await sleep(TEACH_IDLE_POLL_MS);
+            let previous = getFreshJointSnapshot();
+            if (!previous) throw new Error("没有收到有效关节状态，无法判定运动停止");
+
+            while (true) {
+                await sleep(TEACH_IDLE_POLL_MS);
+                const current = getFreshJointSnapshot();
+                if (!current) throw new Error("关节状态中断，已停止示教再现");
+
+                const delta = maxJointDelta(previous, current);
+                if (delta <= TEACH_IDLE_JOINT_EPS_DEG) {
+                    return delta;
+                }
+
+                showToast(`${pointLabel} 仍在运动，最大关节变化 ${delta.toFixed(3)}deg`, "info");
+                previous = current;
+            }
+        };
+
+        window.recordTeachPoint = () => {
+            const pose = getCurrentTcpPose();
+            if (!pose) {
+                showToast("当前 TCP 状态离线或无效，无法记录作业点", "error");
+                return;
+            }
+            teachPoints.push({
+                pose,
+                gripperClosed: currentUiGripperClosed,
+                delayMs: getTeachDelayMs(),
+                recordedAt: Date.now(),
+            });
+            renderTeachPoints();
+            persistTeachPath();
+            showToast(`已记录 P${teachPoints.length}：夹爪${currentUiGripperClosed ? "夹紧" : "松开"}`, "success");
+        };
+
+        window.moveLastTeachPoint = () => {
+            if (!ensureConnected()) return;
+            const point = teachPoints[teachPoints.length - 1];
+            if (!point) {
+                showToast("还没有记录作业点", "error");
+                return;
+            }
+            sendTcpTarget(point.pose);
+            showToast(`已发送 P${teachPoints.length} TCP 位姿`, "success");
+        };
+
+        window.replayTeachPath = async () => {
+            if (!ensureConnected()) return;
+            if (teachReplayBusy) {
+                showToast("示教再现正在执行", "info");
+                return;
+            }
+            if (teachPoints.length === 0) {
+                showToast("还没有记录作业点", "error");
+                return;
+            }
+            if (!confirm(`即将串联再现 ${teachPoints.length} 个作业点。每 2 秒监测一次关节状态，确认无轴运动后进入下一步。请确认机器人周围安全。`)) return;
+
+            teachReplayBusy = true;
+            try {
+                for (let index = 0; index < teachPoints.length; index += 1) {
+                    const point = teachPoints[index];
+                    const pointLabel = `P${index + 1}/${teachPoints.length}`;
+                    sendTcpTarget(point.pose);
+                    showToast(`再现 ${pointLabel}：监测运动状态`, "info");
+                    const idleDelta = await waitUntilRobotIdle(pointLabel);
+                    ws.send(JSON.stringify({
+                        type: "gripper",
+                        closed: gripperPayloadFromUiState(point.gripperClosed),
+                    }));
+                    currentUiGripperClosed = point.gripperClosed;
+                    updateTeachGripperState();
+                    showToast(`再现 ${pointLabel}：已停止，夹爪${point.gripperClosed ? "夹紧" : "松开"}，变化 ${idleDelta.toFixed(3)}deg`, "success");
+                    await sleep(500);
+                }
+                showToast("示教路径再现完成", "success");
+            } catch (error) {
+                showToast(error.message || "示教再现异常停止", "error");
+            } finally {
+                teachReplayBusy = false;
+            }
+        };
+
+        window.removeLastTeachPoint = () => {
+            if (teachPoints.length === 0) {
+                showToast("还没有记录作业点", "error");
+                return;
+            }
+            const removedIndex = teachPoints.length;
+            teachPoints.pop();
+            renderTeachPoints();
+            persistTeachPath();
+            showToast(`已删除 P${removedIndex}`, "info");
+        };
+
+        window.clearTeachPoints = () => {
+            if (teachPoints.length === 0) {
+                showToast("作业点列表已经为空", "info");
+                return;
+            }
+            if (!confirm("确认清空全部示教作业点？")) return;
+            teachPoints = [];
+            renderTeachPoints();
+            persistTeachPath();
+            showToast("已清空示教作业点", "info");
         };
 
         window.sendStop = () => {
@@ -870,8 +1250,10 @@
 
         window.sendGripper = (closed) => {
             if (!ensureConnected()) return;
+            currentUiGripperClosed = closed === GRIPPER_CLOSED_PAYLOAD;
+            updateTeachGripperState();
             ws.send(JSON.stringify({ type: "gripper", closed }));
-            showToast(closed ? "夹爪夹紧指令已发送" : "夹爪松开指令已发送", "success");
+            showToast(currentUiGripperClosed ? "夹爪夹紧指令已发送" : "夹爪松开指令已发送", "success");
         };
 
         window.sendWriting = async () => {
@@ -902,6 +1284,9 @@
         };
 
         window.addEventListener("load", () => {
+            updateTeachGripperState();
+            loadTeachPath(false);
+            renderTeachPoints();
             previewWriting();
             checkCamera();
         });

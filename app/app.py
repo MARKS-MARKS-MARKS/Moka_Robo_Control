@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -18,6 +18,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
+TEACH_PATH_FILE = PROJECT_ROOT / "teach_path.txt"
 ENV_HANZI_DATA_DIR = os.environ.get("HANZI_DATA_DIR")
 HANZI_DATA_DIRS = [
     Path(ENV_HANZI_DATA_DIR).expanduser() if ENV_HANZI_DATA_DIR else None,
@@ -154,6 +155,78 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+def _validate_teach_path_payload(payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be an object")
+
+    raw_points = payload.get("points", [])
+    if not isinstance(raw_points, list):
+        raise ValueError("points must be a list")
+
+    points = []
+    for index, point in enumerate(raw_points, start=1):
+        if not isinstance(point, dict):
+            raise ValueError(f"P{index} must be an object")
+        pose = point.get("pose")
+        if not isinstance(pose, list) or len(pose) != 6:
+            raise ValueError(f"P{index} pose must be a list of 6 numbers")
+        clean_pose = []
+        for value in pose:
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError(f"P{index} pose contains a non-finite number")
+            clean_pose.append(number)
+        delay_ms = float(point.get("delayMs", 2500))
+        if not math.isfinite(delay_ms):
+            raise ValueError(f"P{index} delayMs must be finite")
+        points.append(
+            {
+                "pose": clean_pose,
+                "gripperClosed": bool(point.get("gripperClosed", False)),
+                "delayMs": min(60000, max(300, int(round(delay_ms)))),
+                "recordedAt": int(point.get("recordedAt", int(time.time() * 1000))),
+            }
+        )
+
+    default_delay_ms = float(payload.get("defaultDelayMs", 2500))
+    if not math.isfinite(default_delay_ms):
+        default_delay_ms = 2500
+
+    return {
+        "version": 1,
+        "defaultDelayMs": min(60000, max(300, int(round(default_delay_ms)))),
+        "points": points,
+        "savedAt": int(time.time() * 1000),
+    }
+
+
+@app.get("/teach-path")
+def get_teach_path():
+    if not TEACH_PATH_FILE.is_file():
+        return JSONResponse({"ok": False, "detail": "尚未保存示教链", "points": []}, status_code=404)
+    try:
+        with TEACH_PATH_FILE.open("r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+        clean_payload = _validate_teach_path_payload(payload)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": f"示教链文件读取失败: {exc}"}, status_code=500)
+    return JSONResponse({"ok": True, "path": str(TEACH_PATH_FILE), "data": clean_payload})
+
+
+@app.post("/teach-path")
+def save_teach_path(payload: dict = Body(...)):
+    try:
+        clean_payload = _validate_teach_path_payload(payload)
+        with TEACH_PATH_FILE.open("w", encoding="utf-8") as fp:
+            json.dump(clean_payload, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": f"示教链文件保存失败: {exc}"}, status_code=500)
+    return JSONResponse({"ok": True, "path": str(TEACH_PATH_FILE), "data": clean_payload})
 
 
 @app.get("/camera/status")
