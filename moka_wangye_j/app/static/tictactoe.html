@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>井字棋机器人对弈</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #111827; color: #f9fafb; }
+        .panel { background: #1f2937; border: 1px solid #374151; border-radius: 8px; }
+        .field { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; }
+        .field label { color: #9ca3af; font-size: 12px; font-weight: 700; }
+        .field input {
+            background: #111827;
+            border: 1px solid #374151;
+            color: #fbbf24;
+            border-radius: 6px;
+            padding: 7px 9px;
+            outline: none;
+            min-width: 0;
+        }
+        .field input:focus { border-color: #22d3ee; box-shadow: 0 0 0 1px #22d3ee33; }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-rows: repeat(3, minmax(0, 1fr));
+            width: min(72vw, 420px);
+            aspect-ratio: 1 / 1;
+            border: 2px solid #6b7280;
+            background: #111827;
+        }
+        .cell {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            border: 1px solid #6b7280;
+            background: #f8fafc;
+            color: #111827;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: clamp(44px, 12vw, 96px);
+            font-weight: 900;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .cell:not(:disabled):hover { background: #dbeafe; transform: scale(0.985); }
+        .cell:disabled { cursor: not-allowed; }
+        .cell.win { background: #bbf7d0; color: #166534; }
+        .status-pill {
+            border: 1px solid #374151;
+            background: #111827;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .status-ok { background: #064e3b; border-color: #047857; color: #a7f3d0; }
+        .status-bad { background: #7f1d1d; border-color: #b91c1c; color: #fecaca; }
+        .status-warn { background: #713f12; border-color: #a16207; color: #fde68a; }
+        .log-box {
+            background: #0f172a;
+            border: 1px solid #374151;
+            color: #d1d5db;
+            border-radius: 8px;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+        }
+        .coord-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .coord-cell {
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 8px;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            font-size: 11px;
+            color: #d1d5db;
+            min-height: 58px;
+        }
+        .coord-cell.active { border-color: #22d3ee; background: #0f2733; }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+    <main class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
+        <section class="col-span-12 panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-xl font-black text-cyan-400">井字棋机器人对弈</h1>
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <span id="ws-status" class="status-pill status-bad">未连接</span>
+                    <span id="turn-status" class="status-pill status-warn">人类先手 X</span>
+                    <span id="game-status" class="status-pill">等待开始</span>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="connect-btn" class="bg-blue-600 hover:bg-blue-500 px-10 py-4 rounded-xl text-xl font-black min-w-44 shadow-lg">连接设备</button>
+                <a href="./culture-robot.html" class="bg-gray-700 hover:bg-gray-600 px-10 py-4 rounded-xl text-xl font-black min-w-44 text-center shadow-lg">返回封面</a>
+            </div>
+        </section>
+
+        <section class="col-span-12 lg:col-span-4 panel p-4 space-y-4">
+            <h2 class="text-sm font-bold text-emerald-400 border-l-4 border-emerald-500 pl-2">纸面参数</h2>
+            <div class="grid grid-cols-1 gap-3">
+                <div class="field"><label>中心 X</label><input id="center-x" type="number" value="450" step="1"></div>
+                <div class="field"><label>中心 Y</label><input id="center-y" type="number" value="0" step="1"></div>
+                <div class="field"><label>纸面 Z</label><input id="paper-z" type="number" value="340" step="1"></div>
+                <div class="field"><label>抬笔</label><input id="lift-mm" type="number" value="10" step="1"></div>
+                <div class="field"><label>棋盘尺寸</label><input id="board-size" type="number" value="120" step="5"></div>
+                <div class="field"><label>采样间距</label><input id="sample-mm" type="number" value="8" step="0.5"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button id="draw-board-btn" class="bg-cyan-600 hover:bg-cyan-500 rounded py-3 font-bold">绘制棋盘</button>
+                <button id="reset-btn" class="bg-slate-600 hover:bg-slate-500 rounded py-3 font-bold">重置棋局</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div class="panel p-3">
+                    <div class="text-xs text-gray-400 font-bold">人类</div>
+                    <div class="text-3xl font-black text-yellow-300">X</div>
+                </div>
+                <div class="panel p-3">
+                    <div class="text-xs text-gray-400 font-bold">机器人</div>
+                    <div class="text-3xl font-black text-sky-300">O</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="col-span-12 lg:col-span-8 panel p-4 flex flex-col items-center justify-center gap-4">
+            <div id="board" class="board" aria-label="井字棋棋盘"></div>
+            <div class="text-xs text-gray-400 font-mono" id="board-state">board: .........</div>
+        </section>
+
+        <section class="col-span-12 panel p-4 space-y-3">
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <h2 class="text-sm font-bold text-cyan-400 border-l-4 border-cyan-500 pl-2">纸面坐标映射</h2>
+                <div id="mapping-summary" class="text-xs text-gray-400 font-mono">等待参数计算</div>
+            </div>
+            <div id="coord-grid" class="coord-grid"></div>
+        </section>
+
+        <section class="col-span-12 panel p-4 space-y-3">
+            <h2 class="text-sm font-bold text-purple-400 border-l-4 border-purple-500 pl-2">运行状态</h2>
+            <div id="log" class="log-box min-h-32 p-3">页面已加载。</div>
+        </section>
+    </main>
+
+    <script>
+        const HUMAN = "X";
+        const ROBOT = "O";
+        const EMPTY = "";
+        const WIN_LINES = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+        const board = Array(9).fill(EMPTY);
+        let ws = null;
+        let currentTurn = HUMAN;
+        let gameOver = false;
+        let winningLine = [];
+        let selectedCellIndex = null;
+
+        const wsStatus = document.getElementById("ws-status");
+        const turnStatus = document.getElementById("turn-status");
+        const gameStatus = document.getElementById("game-status");
+        const logEl = document.getElementById("log");
+        const boardStateEl = document.getElementById("board-state");
+        const mappingSummaryEl = document.getElementById("mapping-summary");
+        const coordGridEl = document.getElementById("coord-grid");
+
+        const log = (message) => {
+            const stamp = new Date().toLocaleTimeString();
+            logEl.textContent = `${stamp}  ${message}\n${logEl.textContent}`;
+        };
+
+        const setWsStatus = (text, state) => {
+            wsStatus.textContent = text;
+            wsStatus.className = "status-pill";
+            if(state === "ok") wsStatus.classList.add("status-ok");
+            else if(state === "warn") wsStatus.classList.add("status-warn");
+            else wsStatus.classList.add("status-bad");
+        };
+
+        const backendHost = () => {
+            if(location.port === "9010" || location.protocol === "file:") {
+                return "127.0.0.1:9002";
+            }
+            return location.host;
+        };
+
+        const websocketUrl = () => {
+            const protocol = location.protocol === "https:" ? "wss" : "ws";
+            return `${protocol}://${backendHost()}/ws`;
+        };
+
+        const numberValue = (id, fallback) => {
+            const parsed = parseFloat(document.getElementById(id).value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+
+        const getBoardMapping = () => {
+            const centerX = numberValue("center-x", 450);
+            const centerY = numberValue("center-y", 0);
+            const paperZ = numberValue("paper-z", 340);
+            const lift = numberValue("lift-mm", 10);
+            const boardSize = Math.min(300, Math.max(30, numberValue("board-size", 120)));
+            const sampleSpacing = Math.min(30, Math.max(2, numberValue("sample-mm", 8)));
+            const cellSize = boardSize / 3;
+            const left = centerX - boardSize / 2;
+            const right = centerX + boardSize / 2;
+            const top = centerY + boardSize / 2;
+            const bottom = centerY - boardSize / 2;
+            return { centerX, centerY, paperZ, lift, boardSize, sampleSpacing, cellSize, left, right, top, bottom };
+        };
+
+        const cellCenter = (index, mapping = getBoardMapping()) => {
+            const col = index % 3;
+            const row = Math.floor(index / 3);
+            return {
+                index,
+                row,
+                col,
+                x: mapping.left + mapping.cellSize * (col + 0.5),
+                y: mapping.top - mapping.cellSize * (row + 0.5),
+                z: mapping.paperZ
+            };
+        };
+
+        const renderMapping = () => {
+            const mapping = getBoardMapping();
+            mappingSummaryEl.textContent = `left=${mapping.left.toFixed(1)} right=${mapping.right.toFixed(1)} top=${mapping.top.toFixed(1)} bottom=${mapping.bottom.toFixed(1)} cell=${mapping.cellSize.toFixed(1)} z=${mapping.paperZ.toFixed(1)}`;
+            coordGridEl.innerHTML = "";
+            for(let i = 0; i < 9; i++) {
+                const center = cellCenter(i, mapping);
+                const item = document.createElement("div");
+                item.className = `coord-cell${selectedCellIndex === i ? " active" : ""}`;
+                item.textContent = `${i + 1}  r${center.row} c${center.col}\nX=${center.x.toFixed(1)}\nY=${center.y.toFixed(1)}`;
+                coordGridEl.appendChild(item);
+            }
+        };
+
+        const renderBoard = () => {
+            document.querySelectorAll(".cell").forEach((button, index) => {
+                button.textContent = board[index];
+                button.disabled = gameOver || board[index] !== EMPTY || currentTurn !== HUMAN;
+                button.classList.toggle("win", winningLine.includes(index));
+            });
+            turnStatus.textContent = gameOver ? "棋局结束" : (currentTurn === HUMAN ? "轮到人类 X" : "轮到机器人 O");
+            boardStateEl.textContent = `board: ${board.map(cell => cell || ".").join("")}`;
+            renderMapping();
+        };
+
+        const getWinningLine = (cells) => {
+            for(const line of WIN_LINES) {
+                const [a, b, c] = line;
+                if(cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
+                    return line;
+                }
+            }
+            return [];
+        };
+
+        const getWinner = (cells) => {
+            const line = getWinningLine(cells);
+            return line.length ? cells[line[0]] : null;
+        };
+
+        const isBoardFull = (cells) => cells.every(cell => cell !== EMPTY);
+
+        const getAvailableMoves = (cells) => (
+            cells.map((cell, index) => cell === EMPTY ? index : -1).filter(index => index >= 0)
+        );
+
+        const boardKey = (cells, player) => `${player}:${cells.map(cell => cell || ".").join("")}`;
+        const memo = new Map();
+
+        const minimax = (cells, player) => {
+            const key = boardKey(cells, player);
+            if(memo.has(key)) return memo.get(key);
+
+            const winner = getWinner(cells);
+            if(winner === ROBOT) return { score: 10, move: null };
+            if(winner === HUMAN) return { score: -10, move: null };
+            if(isBoardFull(cells)) return { score: 0, move: null };
+
+            const moves = getAvailableMoves(cells);
+            let best = player === ROBOT
+                ? { score: -Infinity, move: null }
+                : { score: Infinity, move: null };
+
+            for(const move of moves) {
+                const next = cells.slice();
+                next[move] = player;
+                const result = minimax(next, player === ROBOT ? HUMAN : ROBOT);
+                const depthAdjustedScore = result.score + (player === ROBOT ? -0.1 : 0.1);
+                if(player === ROBOT) {
+                    if(depthAdjustedScore > best.score) best = { score: depthAdjustedScore, move };
+                } else {
+                    if(depthAdjustedScore < best.score) best = { score: depthAdjustedScore, move };
+                }
+            }
+
+            memo.set(key, best);
+            return best;
+        };
+
+        const getBestRobotMove = () => minimax(board.slice(), ROBOT).move;
+
+        const evaluateGame = () => {
+            winningLine = getWinningLine(board);
+            const winner = getWinner(board);
+            if(winner) {
+                gameOver = true;
+                gameStatus.textContent = winner === HUMAN ? "人类 X 获胜" : "机器人 O 获胜";
+                gameStatus.className = winner === HUMAN ? "status-pill status-ok" : "status-pill status-bad";
+                log(`${winner === HUMAN ? "人类 X" : "机器人 O"} 获胜。`);
+                return { finished: true, winner };
+            }
+            if(isBoardFull(board)) {
+                gameOver = true;
+                gameStatus.textContent = "平局";
+                gameStatus.className = "status-pill";
+                log("棋局平局。");
+                return { finished: true, winner: null };
+            }
+            return { finished: false, winner: null };
+        };
+
+        const resetGame = () => {
+            board.fill(EMPTY);
+            currentTurn = HUMAN;
+            gameOver = false;
+            winningLine = [];
+            selectedCellIndex = null;
+            gameStatus.textContent = "等待人类落子";
+            gameStatus.className = "status-pill status-warn";
+            renderBoard();
+            log("棋局已重置。");
+        };
+
+        const handleCellClick = (index) => {
+            if(gameOver || currentTurn !== HUMAN || board[index] !== EMPTY) return;
+            selectedCellIndex = index;
+            const center = cellCenter(index);
+            board[index] = HUMAN;
+            gameStatus.textContent = `人类选择第 ${index + 1} 格`;
+            gameStatus.className = "status-pill status-warn";
+            log(`人类落子 X：第 ${index + 1} 格，纸面中心 X=${center.x.toFixed(1)} Y=${center.y.toFixed(1)} Z=${center.z.toFixed(1)}。`);
+            const result = evaluateGame();
+            if(!result.finished) {
+                currentTurn = ROBOT;
+                gameStatus.textContent = "机器人思考中";
+                gameStatus.className = "status-pill status-warn";
+                renderBoard();
+                setTimeout(() => {
+                    if(gameOver || currentTurn !== ROBOT) return;
+                    const robotMove = getBestRobotMove();
+                    if(robotMove === null || robotMove === undefined) {
+                        gameStatus.textContent = "机器人无合法落子";
+                        gameStatus.className = "status-pill";
+                        log("机器人没有找到合法落子。");
+                        return;
+                    }
+                    board[robotMove] = ROBOT;
+                    log(`机器人落子 O：第 ${robotMove + 1} 格。`);
+                    const robotResult = evaluateGame();
+                    if(!robotResult.finished) {
+                        currentTurn = HUMAN;
+                        gameStatus.textContent = "等待人类落子";
+                        gameStatus.className = "status-pill status-warn";
+                    }
+                    renderBoard();
+                }, 250);
+            }
+            renderBoard();
+        };
+
+        const connectRobot = () => {
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                log("WebSocket 已连接。");
+                return;
+            }
+            const url = websocketUrl();
+            setWsStatus("连接中", "warn");
+            log(`连接 ${url}`);
+            ws = new WebSocket(url);
+            ws.onopen = () => {
+                setWsStatus("已连接", "ok");
+                log("WebSocket 已连接。");
+            };
+            ws.onclose = () => {
+                setWsStatus("未连接", "bad");
+                log("WebSocket 已断开。");
+            };
+            ws.onerror = () => {
+                setWsStatus("连接错误", "bad");
+                log("WebSocket 连接错误。");
+            };
+            ws.onmessage = () => {};
+        };
+
+        const drawBoardPlaceholder = () => {
+            log("阶段一仅建立页面骨架；绘制棋盘轨迹会在后续阶段接入。");
+            gameStatus.textContent = "棋盘绘制待接入";
+            gameStatus.className = "status-pill status-warn";
+        };
+
+        const initBoard = () => {
+            const boardEl = document.getElementById("board");
+            boardEl.innerHTML = "";
+            for(let i = 0; i < 9; i++) {
+                const button = document.createElement("button");
+                button.className = "cell";
+                button.type = "button";
+                button.setAttribute("aria-label", `格 ${i + 1}`);
+                button.addEventListener("click", () => handleCellClick(i));
+                boardEl.appendChild(button);
+            }
+            renderBoard();
+        };
+
+        document.getElementById("connect-btn").addEventListener("click", connectRobot);
+        document.getElementById("draw-board-btn").addEventListener("click", drawBoardPlaceholder);
+        document.getElementById("reset-btn").addEventListener("click", resetGame);
+        ["center-x", "center-y", "paper-z", "lift-mm", "board-size", "sample-mm"].forEach(id => {
+            document.getElementById(id).addEventListener("input", renderMapping);
+        });
+
+        window.addEventListener("load", () => {
+            initBoard();
+            resetGame();
+        });
+    </script>
+</body>
+</html>

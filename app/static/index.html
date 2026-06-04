@@ -264,6 +264,41 @@
             object-fit: contain;
         }
 
+        .ttt-board {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-rows: repeat(3, minmax(0, 1fr));
+            aspect-ratio: 1 / 1;
+            border: 1px solid rgba(34, 211, 238, 0.22);
+            background: #020617;
+            overflow: hidden;
+        }
+
+        .ttt-cell {
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            border: 1px solid rgba(34, 211, 238, 0.22);
+            background: #f8fafc;
+            color: #0f172a;
+            font-size: 42px;
+            font-weight: 900;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .ttt-cell:not(:disabled):hover {
+            background: #dbeafe;
+            transform: scale(0.985);
+        }
+
+        .ttt-cell:disabled { cursor: not-allowed; }
+        .ttt-cell.win { background: #bbf7d0; color: #166534; }
+
         #write-preview {
             width: 100%;
             height: 132px;
@@ -312,16 +347,68 @@
                     <div class="mb-4 flex items-center justify-between">
                         <h2 class="text-sm font-black tracking-[0.22em] text-cyan-200">末端相机</h2>
                         <div class="flex items-center gap-2">
-                            <span id="camera-tag" class="rounded-full border border-cyan-400/10 bg-slate-950/65 px-4 py-2 text-xs font-bold text-slate-300">未检测</span>
-                            <button onclick="checkCamera()" class="rounded-full border border-cyan-400/10 bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-cyan-300">检测</button>
-                            <button onclick="startCamera()" class="rounded-full border border-cyan-400/10 bg-emerald-500 px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-emerald-400">预览</button>
-                            <button onclick="stopCamera()" class="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-black text-red-200 transition hover:bg-red-500/20">停止</button>
+                        <span id="camera-tag" class="rounded-full border border-cyan-400/10 bg-slate-950/65 px-4 py-2 text-xs font-bold text-slate-300">未检测</span>
+                        <button onclick="checkCamera()" class="rounded-full border border-cyan-400/10 bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-cyan-300">检测</button>
+                        <button onclick="startCamera()" class="rounded-full border border-cyan-400/10 bg-emerald-500 px-4 py-2 text-xs font-black text-slate-950 transition hover:bg-emerald-400">预览</button>
+                        <button onclick="captureCamera()" class="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/20">拍照</button>
+                        <button onclick="answerCapturedQuestion()" class="rounded-full border border-purple-300/30 bg-purple-300/10 px-4 py-2 text-xs font-black text-purple-100 transition hover:bg-purple-300/20">识别答题</button>
+                        <button onclick="stopCamera()" class="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-black text-red-200 transition hover:bg-red-500/20">停止</button>
+                    </div>
+                </div>
+                <div class="camera-frame flex items-center justify-center">
+                    <img id="camera-view" class="hidden" alt="camera stream">
+                    <span id="camera-placeholder" class="text-sm text-slate-400">相机画面未开启</span>
+                </div>
+                <div id="qa-result" class="mt-3 rounded-2xl border border-purple-300/30 bg-slate-950/65 p-4 text-xs text-slate-300">智能答题：尚未识别</div>
+            </div>
+
+                <div class="panel mt-5 rounded-[24px] p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="text-sm font-black tracking-[0.22em] text-purple-200">智能答题</h2>
+                        <span id="qa-flow-tag" class="rounded-full border border-purple-300/30 bg-purple-300/10 px-4 py-2 text-xs font-bold text-purple-100">待执行</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <div class="mb-2 text-xs font-bold text-slate-300">拍照位姿</div>
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">X</span><input id="qa-photo-x" type="number" class="coord-input" value="591.73" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RX</span><input id="qa-photo-rx" type="number" class="coord-input" value="-3.1416" step="0.0001"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">Y</span><input id="qa-photo-y" type="number" class="coord-input" value="-0.50" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RY</span><input id="qa-photo-ry" type="number" class="coord-input" value="1.3963" step="0.0001"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">Z</span><input id="qa-photo-z" type="number" class="coord-input" value="918.09" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RZ</span><input id="qa-photo-rz" type="number" class="coord-input" value="0" step="0.0001"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="mb-2 text-xs font-bold text-slate-300">答案区域</div>
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">中心X</span><input id="qa-answer-x" type="number" class="coord-input" value="450" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">中心Y</span><input id="qa-answer-y" type="number" class="coord-input" value="0" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="qa-answer-z" type="number" class="coord-input" value="549" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">抬笔</span><input id="qa-answer-lift" type="number" class="coord-input" value="10" step="0.1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">宽</span><input id="qa-answer-width" type="number" class="coord-input" value="80" step="1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">高</span><input id="qa-answer-height" type="number" class="coord-input" value="80" step="1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">采样</span><input id="qa-answer-step" type="number" class="coord-input" value="8" step="1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">上限</span><input id="qa-max-chars" type="number" class="coord-input" value="3" min="1" max="3" step="1"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RX</span><input id="qa-answer-rx" type="number" class="coord-input" value="3.14" step="0.01"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RY</span><input id="qa-answer-ry" type="number" class="coord-input" value="0" step="0.01"></div>
+                                <div class="input-row"><span class="w-16 text-xs text-slate-400">RZ</span><input id="qa-answer-rz" type="number" class="coord-input" value="0" step="0.01"></div>
+                            </div>
                         </div>
                     </div>
-                    <div class="camera-frame flex items-center justify-center">
-                        <img id="camera-view" class="hidden" alt="camera stream">
-                        <span id="camera-placeholder" class="text-sm text-slate-400">相机画面未开启</span>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+                        <button onclick="syncQaPhotoPose()" class="rounded-2xl border border-purple-300/30 bg-purple-300/10 py-3 text-sm font-black text-purple-100 transition hover:bg-purple-300/20">同步拍照位</button>
+                        <button onclick="moveToQaPhotoPose()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">移动到拍照位</button>
+                        <button onclick="captureQaPhoto()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">拍照</button>
+                        <button onclick="recognizeQaAnswer()" class="rounded-2xl border border-purple-300/30 bg-purple-300/10 py-3 text-sm font-black text-purple-100 transition hover:bg-purple-300/20">识别并生成答案</button>
+                        <button onclick="applyQaAnswerToWriting()" class="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/20">写字预览</button>
+                        <button onclick="writeQaAnswer()" class="rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">写出答案</button>
                     </div>
+                    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="saveQaConfig()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">保存参数</button>
+                        <button onclick="resetQaConfig()" class="rounded-2xl border border-slate-400/30 bg-slate-400/10 py-3 text-sm font-black text-slate-200 transition hover:bg-slate-400/20">恢复默认</button>
+                    </div>
+                    <div id="qa-flow-result" class="mt-4 rounded-2xl border border-purple-300/30 bg-slate-950/65 p-4 text-xs text-slate-300">题目：--　原始答案：--　清洗答案：--</div>
                 </div>
 
                 <div class="panel mt-5 rounded-[24px] p-5">
@@ -438,6 +525,32 @@
                     <button onclick="sendWriting()" class="mt-3 w-full rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">开始书写</button>
                 </div>
 
+                <div class="panel rounded-[24px] p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="text-sm font-black tracking-[0.22em] text-sky-200">井字棋对弈</h2>
+                        <span id="ttt-status" class="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-100">人类先手 X</span>
+                    </div>
+                    <div id="ttt-board" class="ttt-board rounded-2xl"></div>
+                    <div id="ttt-state" class="mt-3 text-xs text-slate-400">board: .........</div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">中心X</span><input id="ttt-x" type="number" class="coord-input" value="450" step="0.1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">中心Y</span><input id="ttt-y" type="number" class="coord-input" value="0" step="0.1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="ttt-z" type="number" class="coord-input" value="340" step="0.1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">抬笔</span><input id="ttt-lift" type="number" class="coord-input" value="10" step="0.1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">尺寸</span><input id="ttt-size" type="number" class="coord-input" value="120" step="5"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">采样</span><input id="ttt-step" type="number" class="coord-input" value="8" step="1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">RX</span><input id="ttt-rx" type="number" class="coord-input" value="3.14" step="0.01"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">RY</span><input id="ttt-ry" type="number" class="coord-input" value="0" step="0.01"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">RZ</span><input id="ttt-rz" type="number" class="coord-input" value="0" step="0.01"></div>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="syncTicTacToeCenter()" class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">同步当前 TCP</button>
+                        <button onclick="drawTicTacToeBoard()" class="mt-3 rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">绘制棋盘</button>
+                        <button onclick="resetTicTacToe()" class="mt-3 rounded-2xl border border-slate-400/30 bg-slate-400/10 py-3 text-sm font-black text-slate-200 transition hover:bg-slate-400/20">重置棋局</button>
+                        <button onclick="robotDrawTicTacToeCell()" class="mt-3 rounded-2xl bg-sky-400 py-3 text-sm font-black text-slate-950 transition hover:bg-sky-300">机器人落子</button>
+                    </div>
+                </div>
+
                 <button onclick="sendStop()" class="w-full rounded-[24px] bg-red-500 py-5 text-lg font-black tracking-[0.2em] text-white shadow-[0_18px_40px_rgba(255,91,97,0.24)] transition hover:bg-red-400">紧急停止</button>
             </aside>
         </main>
@@ -456,11 +569,14 @@
         let tcpInputsSyncedFromStatus = false;
         const GRIPPER_CLOSED_PAYLOAD = false;
         const TEACH_STORAGE_KEY = "moka_tcp_teach_path_v1";
+        const QA_CONFIG_STORAGE_KEY = "moka_smart_qa_config_v1";
         const TEACH_IDLE_POLL_MS = 2000;
         const TEACH_IDLE_JOINT_EPS_DEG = 0.05;
         let currentUiGripperClosed = false;
         let teachReplayBusy = false;
         let teachPoints = [];
+        let latestCapturedImageBase64 = "";
+        let latestQaAnswer = null;
         let latestStatus = {
             joints: [0, 0, 0, 0, 0, 0],
             tcp: [0, 0, 0, 0, 0, 0],
@@ -984,6 +1100,219 @@
             return Number.isFinite(value) ? value : fallback;
         };
 
+        const QA_DEFAULT_CONFIG = {
+            photoPose: [591.73, -0.50, 918.09, -3.1416, 1.3963, 0],
+            answerArea: {
+                x: 450,
+                y: 0,
+                z: 549,
+                lift: 10,
+                width: 80,
+                height: 80,
+                step: 8,
+                rx: 3.14,
+                ry: 0,
+                rz: 0,
+            },
+            maxAnswerChars: 3,
+        };
+
+        const qaPoseInputIds = ["qa-photo-x", "qa-photo-y", "qa-photo-z", "qa-photo-rx", "qa-photo-ry", "qa-photo-rz"];
+        const qaAnswerInputMap = {
+            x: "qa-answer-x",
+            y: "qa-answer-y",
+            z: "qa-answer-z",
+            lift: "qa-answer-lift",
+            width: "qa-answer-width",
+            height: "qa-answer-height",
+            step: "qa-answer-step",
+            rx: "qa-answer-rx",
+            ry: "qa-answer-ry",
+            rz: "qa-answer-rz",
+        };
+
+        const setQaFlowTag = (text, type = "idle") => {
+            const tag = document.getElementById("qa-flow-tag");
+            if (!tag) return;
+            tag.textContent = text;
+            let classes = "rounded-full border px-4 py-2 text-xs font-bold ";
+            if (type === "ok") classes += "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
+            else if (type === "bad") classes += "border-red-500/40 bg-red-500/10 text-red-200";
+            else if (type === "work") classes += "border-amber-400/40 bg-amber-400/10 text-amber-100";
+            else classes += "border-purple-300/30 bg-purple-300/10 text-purple-100";
+            tag.className = classes;
+        };
+
+        const setQaFlowResult = (text) => {
+            const result = document.getElementById("qa-flow-result");
+            if (result) result.textContent = text;
+        };
+
+        const getQaPhotoPose = () => ([
+            numberValue("qa-photo-x", QA_DEFAULT_CONFIG.photoPose[0]),
+            numberValue("qa-photo-y", QA_DEFAULT_CONFIG.photoPose[1]),
+            numberValue("qa-photo-z", QA_DEFAULT_CONFIG.photoPose[2]),
+            numberValue("qa-photo-rx", QA_DEFAULT_CONFIG.photoPose[3]),
+            numberValue("qa-photo-ry", QA_DEFAULT_CONFIG.photoPose[4]),
+            numberValue("qa-photo-rz", QA_DEFAULT_CONFIG.photoPose[5]),
+        ]);
+
+        const getQaAnswerArea = () => ({
+            x: numberValue("qa-answer-x", QA_DEFAULT_CONFIG.answerArea.x),
+            y: numberValue("qa-answer-y", QA_DEFAULT_CONFIG.answerArea.y),
+            z: numberValue("qa-answer-z", QA_DEFAULT_CONFIG.answerArea.z),
+            lift: numberValue("qa-answer-lift", QA_DEFAULT_CONFIG.answerArea.lift),
+            width: numberValue("qa-answer-width", QA_DEFAULT_CONFIG.answerArea.width),
+            height: numberValue("qa-answer-height", QA_DEFAULT_CONFIG.answerArea.height),
+            step: numberValue("qa-answer-step", QA_DEFAULT_CONFIG.answerArea.step),
+            rx: numberValue("qa-answer-rx", QA_DEFAULT_CONFIG.answerArea.rx),
+            ry: numberValue("qa-answer-ry", QA_DEFAULT_CONFIG.answerArea.ry),
+            rz: numberValue("qa-answer-rz", QA_DEFAULT_CONFIG.answerArea.rz),
+        });
+
+        const getQaMaxChars = () => Math.min(3, Math.max(1, Math.round(numberValue("qa-max-chars", 3))));
+
+        const applyQaConfig = (config) => {
+            const safe = config || QA_DEFAULT_CONFIG;
+            const pose = Array.isArray(safe.photoPose) && safe.photoPose.length === 6
+                ? safe.photoPose
+                : QA_DEFAULT_CONFIG.photoPose;
+            pose.forEach((value, index) => {
+                const node = document.getElementById(qaPoseInputIds[index]);
+                if (node) node.value = Number(value).toFixed(index < 3 ? 2 : 4);
+            });
+            const area = { ...QA_DEFAULT_CONFIG.answerArea, ...(safe.answerArea || {}) };
+            Object.entries(qaAnswerInputMap).forEach(([key, id]) => {
+                const node = document.getElementById(id);
+                if (node) node.value = Number(area[key]).toFixed(["rx", "ry", "rz"].includes(key) ? 4 : 1);
+            });
+            const maxChars = document.getElementById("qa-max-chars");
+            if (maxChars) maxChars.value = String(Math.min(3, Math.max(1, Number(safe.maxAnswerChars || 3))));
+        };
+
+        const buildQaConfig = () => ({
+            photoPose: getQaPhotoPose(),
+            answerArea: getQaAnswerArea(),
+            maxAnswerChars: getQaMaxChars(),
+        });
+
+        const loadQaConfig = () => {
+            try {
+                const raw = window.localStorage.getItem(QA_CONFIG_STORAGE_KEY);
+                applyQaConfig(raw ? JSON.parse(raw) : QA_DEFAULT_CONFIG);
+            } catch (error) {
+                applyQaConfig(QA_DEFAULT_CONFIG);
+                showToast("智能答题参数读取失败，已使用默认值", "error");
+            }
+        };
+
+        window.saveQaConfig = () => {
+            try {
+                const config = buildQaConfig();
+                window.localStorage.setItem(QA_CONFIG_STORAGE_KEY, JSON.stringify(config));
+                setQaFlowTag("参数已保存", "ok");
+                showToast("智能答题参数已保存", "success");
+            } catch (error) {
+                showToast("智能答题参数保存失败", "error");
+            }
+        };
+
+        window.resetQaConfig = () => {
+            applyQaConfig(QA_DEFAULT_CONFIG);
+            window.localStorage.removeItem(QA_CONFIG_STORAGE_KEY);
+            setQaFlowTag("已恢复默认", "ok");
+            showToast("已恢复智能答题默认参数", "success");
+        };
+
+        window.syncQaPhotoPose = () => {
+            const pose = getCurrentTcpPose();
+            if (!pose) {
+                showToast("当前 TCP 状态离线或无效，无法同步拍照位", "error");
+                return;
+            }
+            pose.forEach((value, index) => {
+                const node = document.getElementById(qaPoseInputIds[index]);
+                if (node) node.value = Number(value).toFixed(index < 3 ? 2 : 4);
+            });
+            window.saveQaConfig();
+            setQaFlowTag("已同步拍照位", "ok");
+        };
+
+        window.moveToQaPhotoPose = () => {
+            if (!ensureConnected()) return;
+            const target = getQaPhotoPose();
+            if (!confirm("即将移动到智能答题拍照位，请确认机器人周围安全。")) return;
+            ws.send(JSON.stringify({ type: "movel_cart", target }));
+            setQaFlowTag("移动中", "work");
+            showToast("已发送拍照位移动指令", "success");
+        };
+
+        window.captureQaPhoto = async () => {
+            setQaFlowTag("拍照中", "work");
+            const data = await captureCamera();
+            if (data) {
+                setQaFlowTag("已拍照", "ok");
+                setQaFlowResult("题目：--　原始答案：--　清洗答案：--");
+            } else {
+                setQaFlowTag("拍照失败", "bad");
+            }
+            return data;
+        };
+
+        window.recognizeQaAnswer = async () => {
+            const data = await answerCapturedQuestion();
+            if (!data) {
+                setQaFlowTag("识别失败", "bad");
+                return null;
+            }
+            latestQaAnswer = data;
+            setQaFlowTag("已生成答案", "ok");
+            setQaFlowResult(`题目：${data.question || "--"}　原始答案：${data.rawAnswer || "--"}　清洗答案：${data.cleanAnswer || "--"}`);
+            return data;
+        };
+
+        const copyQaAreaToWritingInputs = () => {
+            const area = getQaAnswerArea();
+            const copies = {
+                "write-x": area.x,
+                "write-y": area.y,
+                "write-z": area.z,
+                "write-lift": area.lift,
+                "write-width": area.width,
+                "write-height": area.height,
+                "write-step": area.step,
+                "write-rx": area.rx,
+                "write-ry": area.ry,
+                "write-rz": area.rz,
+            };
+            Object.entries(copies).forEach(([id, value]) => {
+                const node = document.getElementById(id);
+                if (node) node.value = Number(value).toFixed(["write-rx", "write-ry", "write-rz"].includes(id) ? 4 : 1);
+            });
+        };
+
+        window.applyQaAnswerToWriting = async () => {
+            const answer = latestQaAnswer?.cleanAnswer || "";
+            if (!answer) {
+                showToast("还没有清洗后的答案", "error");
+                return false;
+            }
+            const textNode = document.getElementById("write-text");
+            if (textNode) textNode.value = answer.slice(0, 3);
+            copyQaAreaToWritingInputs();
+            await previewWriting();
+            window.saveQaConfig();
+            setQaFlowTag("已生成预览", "ok");
+            showToast(`已生成答案书写预览：${answer.slice(0, 3)}`, "success");
+            return true;
+        };
+
+        window.writeQaAnswer = async () => {
+            const ok = await applyQaAnswerToWriting();
+            if (!ok) return;
+            await sendWriting();
+        };
+
         const setCameraTag = (text, ok = null) => {
             const tag = document.getElementById("camera-tag");
             if (!tag) return;
@@ -1019,6 +1348,63 @@
             img.src = `/camera/stream?t=${Date.now()}`;
             img.classList.remove("hidden");
             placeholder.classList.add("hidden");
+        };
+
+        window.captureCamera = async () => {
+            const img = document.getElementById("camera-view");
+            const placeholder = document.getElementById("camera-placeholder");
+            if (!img || !placeholder) return;
+            try {
+                setCameraTag("拍照中");
+                const resp = await fetch("/camera/capture", { cache: "no-store" });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.detail || "拍照失败");
+                }
+                latestCapturedImageBase64 = data.imageBase64;
+                img.src = `data:image/jpeg;base64,${data.imageBase64}`;
+                img.classList.remove("hidden");
+                placeholder.classList.add("hidden");
+                setCameraTag("已拍照", true);
+                showToast(`拍照完成：${data.width}x${data.height}`, "success");
+                return data;
+            } catch (error) {
+                setCameraTag("拍照失败", false);
+                showToast(error.message || "相机拍照失败", "error");
+                return null;
+            }
+        };
+
+        window.answerCapturedQuestion = async () => {
+            const resultNode = document.getElementById("qa-result");
+            if (!latestCapturedImageBase64) {
+                showToast("请先拍照", "error");
+                return;
+            }
+            try {
+                if (resultNode) resultNode.textContent = "智能答题：识别中...";
+                const resp = await fetch("/qa/answer", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        imageBase64: latestCapturedImageBase64,
+                        maxAnswerChars: getQaMaxChars(),
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {
+                    throw new Error(data.detail || "识别失败");
+                }
+                if (resultNode) {
+                    resultNode.textContent = `智能答题：模型=${data.model}  原始=${data.rawAnswer || "--"}  清洗=${data.cleanAnswer || "--"}`;
+                }
+                showToast(`识别答案：${data.cleanAnswer}`, "success");
+                return data;
+            } catch (error) {
+                if (resultNode) resultNode.textContent = `智能答题：${error.message || error}`;
+                showToast(error.message || "智能答题失败", "error");
+                return null;
+            }
         };
 
         window.stopCamera = () => {
@@ -1167,7 +1553,7 @@
             const rx = numberValue("write-rx", 3.14);
             const ry = numberValue("write-ry", 0);
             const rz = numberValue("write-rz", 0);
-            const maxWritePoints = 512;
+            const maxWritePoints = 1024;
             const points = [];
             const missingChars = [];
 
@@ -1227,6 +1613,280 @@
             };
         };
 
+        const TTT_HUMAN = "X";
+        const TTT_ROBOT = "O";
+        const TTT_EMPTY = "";
+        const TTT_WIN_LINES = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6],
+        ];
+        const tttBoard = Array(9).fill(TTT_EMPTY);
+        const tttMemo = new Map();
+        let tttCurrentTurn = TTT_HUMAN;
+        let tttGameOver = false;
+        let tttWinningLine = [];
+
+        const tttMapping = () => {
+            const centerX = numberValue("ttt-x", 450);
+            const centerY = numberValue("ttt-y", 0);
+            const paperZ = numberValue("ttt-z", 340);
+            const lift = numberValue("ttt-lift", 10);
+            const boardSize = Math.min(240, Math.max(45, numberValue("ttt-size", 120)));
+            const sampleSpacing = Math.min(20, Math.max(2, numberValue("ttt-step", 8)));
+            const rx = numberValue("ttt-rx", 3.14);
+            const ry = numberValue("ttt-ry", 0);
+            const rz = numberValue("ttt-rz", 0);
+            const cell = boardSize / 3;
+            return {
+                centerX, centerY, paperZ, lift, boardSize, sampleSpacing, rx, ry, rz, cell,
+                left: centerX - boardSize / 2,
+                right: centerX + boardSize / 2,
+                top: centerY + boardSize / 2,
+                bottom: centerY - boardSize / 2,
+            };
+        };
+
+        const tttCellCenter = (index, mapping = tttMapping()) => {
+            const row = Math.floor(index / 3);
+            const col = index % 3;
+            return {
+                x: mapping.left + mapping.cell * (col + 0.5),
+                y: mapping.top - mapping.cell * (row + 0.5),
+            };
+        };
+
+        const appendPaperStroke = (points, stroke, mapping) => {
+            const sampled = resamplePaperStroke(stroke, mapping.sampleSpacing);
+            if (sampled.length === 0) return;
+            const first = sampled[0];
+            points.push([first.x, first.y, mapping.paperZ + mapping.lift, mapping.rx, mapping.ry, mapping.rz]);
+            points.push([first.x, first.y, mapping.paperZ, mapping.rx, mapping.ry, mapping.rz]);
+            sampled.forEach((point) => {
+                points.push([
+                    Number(point.x.toFixed(3)),
+                    Number(point.y.toFixed(3)),
+                    Number(mapping.paperZ.toFixed(3)),
+                    mapping.rx,
+                    mapping.ry,
+                    mapping.rz,
+                ]);
+            });
+            const last = sampled[sampled.length - 1];
+            points.push([last.x, last.y, mapping.paperZ + mapping.lift, mapping.rx, mapping.ry, mapping.rz]);
+        };
+
+        const makeTicTacToeBoardPath = () => {
+            const mapping = tttMapping();
+            const margin = mapping.boardSize * 0.02;
+            const lines = [];
+            for (let i = 1; i <= 2; i += 1) {
+                const x = mapping.left + mapping.cell * i;
+                const y = mapping.top - mapping.cell * i;
+                lines.push([{ x, y: mapping.top - margin }, { x, y: mapping.bottom + margin }]);
+                lines.push([{ x: mapping.left + margin, y }, { x: mapping.right - margin, y }]);
+            }
+            const points = [];
+            lines.forEach((line) => appendPaperStroke(points, line, mapping));
+            return { points, lift: mapping.lift };
+        };
+
+        const makeTicTacToeMarkPath = (index, mark) => {
+            const mapping = tttMapping();
+            const center = tttCellCenter(index, mapping);
+            const radius = mapping.cell * 0.27;
+            const points = [];
+            if (mark === TTT_ROBOT) {
+                const circle = [];
+                const steps = Math.max(16, Math.ceil((2 * Math.PI * radius) / mapping.sampleSpacing));
+                for (let i = 0; i <= steps; i += 1) {
+                    const angle = (Math.PI * 2 * i) / steps;
+                    circle.push({
+                        x: center.x + Math.cos(angle) * radius,
+                        y: center.y + Math.sin(angle) * radius,
+                    });
+                }
+                appendPaperStroke(points, circle, mapping);
+            } else {
+                const r = radius * 0.82;
+                appendPaperStroke(points, [{ x: center.x - r, y: center.y - r }, { x: center.x + r, y: center.y + r }], mapping);
+                appendPaperStroke(points, [{ x: center.x - r, y: center.y + r }, { x: center.x + r, y: center.y - r }], mapping);
+            }
+            return { points, lift: mapping.lift };
+        };
+
+        const sendTicTacToePath = (path, label) => {
+            if (!ensureConnected()) return false;
+            if (!path.points || path.points.length < 2) {
+                showToast(`${label} 没有生成轨迹`, "error");
+                return false;
+            }
+            if (path.points.length > 1024) {
+                showToast(`${label} 轨迹点 ${path.points.length} 超过 1024，请增大采样`, "error");
+                return false;
+            }
+            if (path.points.some((point) => Math.abs(point[0]) > 1200 || Math.abs(point[1]) > 1200 || point[2] < -100 || point[2] > 1200)) {
+                showToast(`${label} 坐标超出安全范围`, "error");
+                return false;
+            }
+            ws.send(JSON.stringify({ type: "write_path", points: path.points, lift: path.lift }));
+            showToast(`${label} 轨迹已发送：${path.points.length} 点`, "success");
+            return true;
+        };
+
+        const tttGetWinningLine = (cells) => {
+            for (const line of TTT_WIN_LINES) {
+                const [a, b, c] = line;
+                if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) return line;
+            }
+            return [];
+        };
+
+        const tttGetWinner = (cells) => {
+            const line = tttGetWinningLine(cells);
+            return line.length ? cells[line[0]] : null;
+        };
+
+        const tttIsFull = (cells) => cells.every((cell) => cell !== TTT_EMPTY);
+        const tttAvailableMoves = (cells) => cells.map((cell, index) => cell === TTT_EMPTY ? index : -1).filter((index) => index >= 0);
+        const tttBoardKey = (cells, player) => `${player}:${cells.map((cell) => cell || ".").join("")}`;
+
+        const tttMinimax = (cells, player) => {
+            const key = tttBoardKey(cells, player);
+            if (tttMemo.has(key)) return tttMemo.get(key);
+            const winner = tttGetWinner(cells);
+            if (winner === TTT_ROBOT) return { score: 10, move: null };
+            if (winner === TTT_HUMAN) return { score: -10, move: null };
+            if (tttIsFull(cells)) return { score: 0, move: null };
+            let best = player === TTT_ROBOT ? { score: -Infinity, move: null } : { score: Infinity, move: null };
+            for (const move of tttAvailableMoves(cells)) {
+                const next = cells.slice();
+                next[move] = player;
+                const result = tttMinimax(next, player === TTT_ROBOT ? TTT_HUMAN : TTT_ROBOT);
+                const score = result.score + (player === TTT_ROBOT ? -0.1 : 0.1);
+                if (player === TTT_ROBOT && score > best.score) best = { score, move };
+                if (player === TTT_HUMAN && score < best.score) best = { score, move };
+            }
+            tttMemo.set(key, best);
+            return best;
+        };
+
+        const tttSetStatus = (text, type = "warn") => {
+            const status = document.getElementById("ttt-status");
+            if (!status) return;
+            status.textContent = text;
+            let classes = "rounded-full border px-4 py-2 text-xs font-bold ";
+            if (type === "ok") classes += "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
+            else if (type === "bad") classes += "border-red-500/40 bg-red-500/10 text-red-200";
+            else classes += "border-amber-400/40 bg-amber-400/10 text-amber-100";
+            status.className = classes;
+        };
+
+        const tttRender = () => {
+            document.querySelectorAll(".ttt-cell").forEach((button, index) => {
+                button.textContent = tttBoard[index];
+                button.disabled = tttGameOver || tttBoard[index] !== TTT_EMPTY || tttCurrentTurn !== TTT_HUMAN;
+                button.classList.toggle("win", tttWinningLine.includes(index));
+            });
+            const state = document.getElementById("ttt-state");
+            if (state) state.textContent = `board: ${tttBoard.map((cell) => cell || ".").join("")}`;
+        };
+
+        const tttEvaluate = () => {
+            tttWinningLine = tttGetWinningLine(tttBoard);
+            const winner = tttGetWinner(tttBoard);
+            if (winner) {
+                tttGameOver = true;
+                tttSetStatus(winner === TTT_HUMAN ? "人类 X 获胜" : "机器人 O 获胜", winner === TTT_HUMAN ? "ok" : "bad");
+                return true;
+            }
+            if (tttIsFull(tttBoard)) {
+                tttGameOver = true;
+                tttSetStatus("平局", "warn");
+                return true;
+            }
+            return false;
+        };
+
+        window.robotDrawTicTacToeCell = () => {
+            if (tttGameOver || tttCurrentTurn !== TTT_ROBOT) {
+                showToast("当前不是机器人落子回合", "error");
+                return;
+            }
+            const move = tttMinimax(tttBoard.slice(), TTT_ROBOT).move;
+            if (move === null || move === undefined) {
+                tttSetStatus("机器人无合法落子", "warn");
+                return;
+            }
+            const path = makeTicTacToeMarkPath(move, TTT_ROBOT);
+            if (!confirm(`机器人将在第 ${move + 1} 格书写 O，请确认纸面和周围安全。`)) return;
+            if (!sendTicTacToePath(path, `机器人 O 落子 P${move + 1}`)) return;
+            tttBoard[move] = TTT_ROBOT;
+            if (!tttEvaluate()) {
+                tttCurrentTurn = TTT_HUMAN;
+                tttSetStatus("等待人类落子", "warn");
+            }
+            tttRender();
+        };
+
+        const tttHumanMove = (index) => {
+            if (tttGameOver || tttCurrentTurn !== TTT_HUMAN || tttBoard[index] !== TTT_EMPTY) return;
+            const path = makeTicTacToeMarkPath(index, TTT_HUMAN);
+            if (!confirm(`将在第 ${index + 1} 格书写 X，请确认纸面和周围安全。`)) return;
+            if (!sendTicTacToePath(path, `人类 X 落子 P${index + 1}`)) return;
+            tttBoard[index] = TTT_HUMAN;
+            if (!tttEvaluate()) {
+                tttCurrentTurn = TTT_ROBOT;
+                tttSetStatus("轮到机器人 O", "warn");
+            }
+            tttRender();
+        };
+
+        const initTicTacToe = () => {
+            const boardEl = document.getElementById("ttt-board");
+            if (!boardEl) return;
+            boardEl.innerHTML = "";
+            for (let i = 0; i < 9; i += 1) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "ttt-cell";
+                button.setAttribute("aria-label", `井字棋第 ${i + 1} 格`);
+                button.addEventListener("click", () => tttHumanMove(i));
+                boardEl.appendChild(button);
+            }
+            window.resetTicTacToe();
+        };
+
+        window.resetTicTacToe = () => {
+            tttBoard.fill(TTT_EMPTY);
+            tttMemo.clear();
+            tttCurrentTurn = TTT_HUMAN;
+            tttGameOver = false;
+            tttWinningLine = [];
+            tttSetStatus("等待人类落子", "warn");
+            tttRender();
+        };
+
+        window.drawTicTacToeBoard = () => {
+            if (!confirm("即将绘制井字棋棋盘，请确认纸面 Z 和周围安全。")) return;
+            sendTicTacToePath(makeTicTacToeBoardPath(), "井字棋棋盘");
+        };
+
+        window.syncTicTacToeCenter = () => {
+            const tcp = latestStatus.tcp;
+            if (!Array.isArray(tcp) || tcp.length !== 6) {
+                showToast("还没有收到 TCP 状态", "error");
+                return;
+            }
+            document.getElementById("ttt-x").value = Number(tcp[0]).toFixed(1);
+            document.getElementById("ttt-y").value = Number(tcp[1]).toFixed(1);
+            document.getElementById("ttt-z").value = Number(tcp[2] + 30).toFixed(1);
+            document.getElementById("ttt-rx").value = Number(tcp[3]).toFixed(4);
+            document.getElementById("ttt-ry").value = Number(tcp[4]).toFixed(4);
+            document.getElementById("ttt-rz").value = Number(tcp[5]).toFixed(4);
+            showToast("已同步井字棋纸面中心", "success");
+        };
+
         window.previewWriting = async () => {
             const { points, originX, originY, widthMm, heightMm, paperZ } = await makeWritingPath();
             const preview = document.getElementById("write-preview");
@@ -1284,11 +1944,13 @@
         };
 
         window.addEventListener("load", () => {
+            loadQaConfig();
             updateTeachGripperState();
             loadTeachPath(false);
             renderTeachPoints();
             previewWriting();
             checkCamera();
+            initTicTacToe();
         });
 
         window.setTimeout(() => {

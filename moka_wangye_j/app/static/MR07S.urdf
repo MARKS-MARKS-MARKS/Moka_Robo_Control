@@ -1,0 +1,765 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="mr07s">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="10.639" />
+      <inertia
+        ixx="0.073952"
+        ixy="-0.00021632"
+        ixz="-1.4955E-05"
+        iyy="0.088063"
+        iyz="5.1017E-07"
+        izz="0.098988" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link1">
+    <inertial>
+      <origin
+        xyz="0.0044261 0.11272 3.0488E-05"
+        rpy="0 0 0" />
+      <mass
+        value="4.7503" />
+      <inertia
+        ixx="0.066795"
+        ixy="0.0011275"
+        ixz="0.00016496"
+        iyy="0.054205"
+        iyz="-9.3936E-06"
+        izz="0.034784" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint1"
+    type="revolute">
+    <origin
+      xyz="-0.08087 -0.28412 0.10017"
+      rpy="1.5708 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link1" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link2">
+    <inertial>
+      <origin
+        xyz="-0.0017618 0.18196 -4.2386E-06"
+        rpy="0 0 0" />
+      <mass
+        value="10.025" />
+      <inertia
+        ixx="0.35474"
+        ixy="-0.0050842"
+        ixz="-3.4765E-06"
+        iyy="0.050848"
+        iyz="-4.8636E-05"
+        izz="0.33232" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint2"
+    type="revolute">
+    <origin
+      xyz="0 0.164 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link1" />
+    <child
+      link="Link2" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link3">
+    <inertial>
+      <origin
+        xyz="-0.028935 0.050304 1.242E-05"
+        rpy="0 0 0" />
+      <mass
+        value="4.8" />
+      <inertia
+        ixx="0.023824"
+        ixy="0.0071231"
+        ixz="-1.0819E-06"
+        iyy="0.022455"
+        iyz="-3.4868E-08"
+        izz="0.033003" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint3"
+    type="revolute">
+    <origin
+      xyz="0 0.45 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link2" />
+    <child
+      link="Link3" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link4">
+    <inertial>
+      <origin
+        xyz="-0.14945 3.6073E-05 0.00026246"
+        rpy="0 0 0" />
+      <mass
+        value="4.1815" />
+      <inertia
+        ixx="0.011156"
+        ixy="6.7843E-06"
+        ixz="0.00016135"
+        iyy="0.04173"
+        iyz="-8.3629E-07"
+        izz="0.037617" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint4"
+    type="revolute">
+    <origin
+      xyz="-0.151 0.1 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link3" />
+    <child
+      link="Link4" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link5">
+    <inertial>
+      <origin
+        xyz="-0.015049 2.1362E-05 1.4696E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.92857" />
+      <inertia
+        ixx="0.00091923"
+        ixy="-5.0151E-07"
+        ixz="-2.7709E-07"
+        iyy="0.0021802"
+        iyz="-7.2262E-07"
+        izz="0.002357" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint5"
+    type="revolute">
+    <origin
+      xyz="-0.319 0 0"
+      rpy="0 0 1.5707963" />
+    <parent
+      link="Link4" />
+    <child
+      link="Link5" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="Link6">
+    <inertial>
+      <origin
+        xyz="-0.0088433 -9.0514E-05 5.5511E-17"
+        rpy="0 0 0" />
+      <mass
+        value="0.027826" />
+      <inertia
+        ixx="1.3194E-05"
+        ixy="-1.0244E-09"
+        ixz="-2.0432E-22"
+        iyy="6.9579E-06"
+        iyz="4.2759E-21"
+        izz="6.8848E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link6.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://mr07s/meshes/Link6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint6"
+    type="revolute">
+    <origin
+      xyz="-0.108 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="Link5" />
+    <child
+      link="Link6" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="0" />
+  </joint>
+    <material name="Orange">
+    <color rgba="1.0 0.423529411765 0.0392156862745 0.9"/>
+  </material>
+  <material name="Grey">
+    <color rgba="0.50196 0.50196 0.50196 1"/>
+  </material>
+  <material name="Blue">
+    <color rgba="0 0 1 1"/>
+  </material>
+  <material name="Red">
+    <color rgba="1 0 0 1"/>
+  </material>  
+  <material name="Brown">
+    <color rgba="0.50196 0.1647 0.1647 1"/>
+  </material>
+  <material name="Green">
+    <color rgba="0 1 0 1"/>
+  </material>
+  <!-- MR07S hand -->
+  <joint name="MR07S-tool_base" type="fixed">
+    <parent link="Link6"/>
+    <child link="MR07S_tool_base"/>
+    <!-- <origin rpy="3.1415926535 0 0.7854" xyz="0 0 -0.04"/> -->
+    <origin rpy="1.570786 0 -1.5708" xyz="-0.02 0 0"/>
+  </joint>
+
+  <link name="MR07S_tool_base">
+    <!--<inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.2"/>
+      <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_01.stl"/>
+      </geometry>
+      <material name="Grey"/>
+    </visual>
+    <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_01.stl"/>
+        </geometry>
+        <material name="Grey"/>
+    </collision>-->
+  </link>
+
+
+  <joint name="MR07S_Hiwin_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0.104"/>
+    <parent link="MR07S_tool_base"/>
+    <child link="MR07S_Hiwin"/>
+  </joint>
+
+  <link name="MR07S_Hiwin">
+    <inertial>
+        <mass value="0.001" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0"  izz="0.0001" />
+    </inertial>
+    <visual>
+        <origin xyz="0 0 -0.054" rpy="0 0 -0.785398" />
+        <geometry>
+            <box size="0.018 0.038 0.104" />
+        </geometry>
+        <material name="Grey"/>
+    </visual>
+    <collision>
+        <origin xyz="0 0 -0.054" rpy="0 0 -0.785398" />
+        <geometry>
+            <box size="0.018 0.038 0.104" />
+        </geometry>
+        <material name="Grey"/>
+    </collision>
+  </link>
+
+
+  <joint name="MR07S_toolbase_hiwin" type="fixed">
+    <!-- <origin rpy="1.5708 0 3.145926535" xyz="0 0.10 0.10"/> -->
+    <origin rpy="0 0 -0.7854" xyz="0.00 0.00 0"/>
+    <parent link="MR07S_Hiwin"/>
+    <child link="MR07S_Hiwin_base"/>
+  </joint>
+
+
+  <link name="MR07S_Hiwin_base">
+    <inertial>
+      <!-- <origin  xyz="-0.000372881534360556 2.44142256911499E-06 0.0306785725962284"  rpy="0 0 0" /> -->
+      <origin
+        xyz="0 0.008 0.055"  rpy="1.5708 0 0" />
+      <mass
+        value="0.250933542525954" />
+      <inertia
+        ixx="0.000101445651698207"  ixy="-2.28274484518009E-10"  ixz="-1.00858554937318E-06"  iyy="0.000420364887876067"  iyz="5.637983554928E-09"  izz="0.000362419868166457" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0.008 0.055"  rpy="1.5708 0 0" />
+      <geometry>
+        <mesh  filename="package://hiwin/meshs/Hiwin_base.STL" />
+      </geometry>
+      <!-- <material  name="">
+        <color  rgba="0.870588235294 0.811764705882 0.764705882353 1.0" />
+      </material> -->
+      <material name="Brown"/>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0.008 0.055"  rpy="1.5708 0 0" />
+      <geometry>
+        <mesh  filename="package://hiwin/meshs/Hiwin_base.STL" />
+      </geometry>
+      <!-- <material  name="">
+        <color  rgba="0.870588235294 0.811764705882 0.764705882353 1.0" />
+      </material> -->
+      <material name="Brown"/>
+    </collision>
+  </link>
+  
+
+  <joint  name="MR07S_Hiwin_finger1_joint"  type="fixed">
+    <origin  xyz="0.000 0.010 0.0552"  rpy="-1.5708 0 0" />
+    <parent  link="MR07S_Hiwin_base" />
+    <child  link="MR07S_Hiwin_finger1" />
+    <axis  xyz="1 0 0" />
+    <limit  lower="0"  upper="0.016"  effort="0"  velocity="0" />
+  </joint>
+
+
+  <link  name="MR07S_Hiwin_finger1">
+    <inertial>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 0 0" />
+      <mass
+        value="0.0030491" />
+      <inertia
+        ixx="1.8227E-07"  ixy="3.8841E-22"  ixz="9.404E-23"  iyy="2.6256E-07"  iyz="-9.3883E-11"  izz="1.0254E-07" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://hiwin/meshs/finger1.STL" />
+      </geometry>
+      <material name="Blue"/>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://hiwin/meshs/finger1.STL" />
+      </geometry>
+      <material name="Blue"/>
+    </collision>
+  </link>
+
+<!--  -0.012 -->
+  <joint name="MR07S_Hiwin_finger1_box_joint" type="fixed">
+    <origin rpy="1.5708 0 0" xyz="0 -0.042 0.025"/>
+    <parent link="MR07S_Hiwin_finger1"/>
+    <child link="MR07S_Hiwin_finger1_box"/>
+  </joint>
+
+  <link name="MR07S_Hiwin_finger1_box">
+    <inertial>
+        <mass value="0.001" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0"  izz="0.0001" />
+    </inertial>
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <box size="0.02 0.02 0.06" />
+        </geometry>
+        <material name="Blue"/>
+    </visual>
+    <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <box size="0.02 0.02 0.06" />
+        </geometry>
+        <material name="Blue"/>
+    </collision>
+  </link>
+  
+ 
+
+<!--  -0.0552 -->
+  <joint  name="MR07S_Hiwin_finger2_joint"  type="fixed">
+    <origin  xyz="0.000 -0.010 0.0552"  rpy="1.5708 0 0" />
+    <parent  link="MR07S_Hiwin_base" />
+    <child  link="MR07S_Hiwin_finger2" />
+    <!-- <axis  xyz="1 0 0" />
+    <limit  lower="0"  upper="0"  effort="0"  velocity="0" />
+    <mimic  joint="finger1_joint"  multiplier="1"  offset="0" /> -->
+  </joint>
+
+
+  <link  name="MR07S_Hiwin_finger2">
+    <inertial>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 3.1415926535 0" />
+      <mass
+        value="0" />
+      <inertia
+        ixx="0"  ixy="0"  ixz="0"  iyy="0"  iyz="0"  izz="0" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 3.1415926535 0" />
+      <geometry>
+        <mesh  filename="package://hiwin/meshs/finger2.STL" />
+      </geometry>
+      <material name="Green"/>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0.00875"  rpy="0 3.1415926535 0" />
+      <geometry>
+        <mesh  filename="package://hiwin/meshs/finger2.STL" />
+      </geometry>
+      <material name="Green"/>
+    </collision>
+  </link>
+
+  <joint name="MR07S_Hiwin_finger2_box_joint" type="fixed">
+    <origin rpy="1.5708 0 0" xyz="0 0.042 0.025"/>
+    <parent link="MR07S_Hiwin_finger2"/>
+    <child link="MR07S_Hiwin_finger2_box"/>
+  </joint>
+
+  <link name="MR07S_Hiwin_finger2_box">
+    <inertial>
+        <mass value="0.001" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0"  izz="0.0001" />
+    </inertial>
+    <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <box size="0.02 0.02 0.06" />
+        </geometry>
+        <material name="Green"/>
+    </visual>
+    <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <box size="0.02 0.02 0.06" />
+        </geometry>
+        <material name="Green"/>
+    </collision>
+  </link>
+
+<!--  
+  <joint name="gripper_l_joint" type="prismatic">
+    <parent link="MR07S_tool_base"/>
+    <child link="gripper_l_finger_r"/>
+    <origin rpy="0 0 1.05884" xyz="0.0054 -0.0031 0.0777"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="20" lower="0.015" upper="0.02" velocity="2"/>
+    <dynamics damping="1.0"/>
+  </joint>
+
+  <link name="gripper_l_finger_r">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_02_l.stl"/>
+      </geometry>
+      <material name="Blue"/>
+    </visual>
+     <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_02_l.stl"/>
+      </geometry>
+      <material name="Blue"/>
+    </collision> 
+  </link>
+
+  <joint name="gripper_l_joint_m" type="prismatic">
+    <parent link="MR07S_tool_base"/>
+    <child link="gripper_l_finger_l"/>
+    <origin rpy="0 0 -2.08275" xyz="0.0 0 0.0777"/>
+    <axis xyz="1 0 0"/>
+    <limit effort="20" lower="0.015" upper="0.02" velocity="2"/>
+    <dynamics damping="1.0"/>
+    <mimic joint="gripper_l_joint"/>
+  </joint>
+
+  <link name="gripper_l_finger_l">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.00625 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 -0.00625 0"/>
+      <geometry>
+        <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_02_l.stl"/>
+      </geometry>
+      <material name="Green"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 -0.00625 0"/>
+      <geometry>
+        <mesh filename="package://double_robot_description/meshes/air_gripper/air_gripper_02_l.stl"/>
+      </geometry>
+      <material name="Green"/>
+    </collision>
+  </link>
+
+-->
+
+  <joint name="MR07S_end_frame" type="fixed">
+    <origin rpy="1.570786 0 -1.5708" xyz="-0.25 0 0"/>
+    <parent link="Link6"/>
+    <child link="MR07S_end_frame"/>
+  </joint>
+
+  <link name="MR07S_end_frame">
+  </link>  
+  
+	  <material name="blue">
+    <color rgba="0 0 0.8 1"/>
+  </material>
+  <joint name="world-table" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.65 -0.3 -0.0421"/>
+    <child link="table"/>
+    <parent link="base_link"/>
+  </joint>
+  <link name="table">
+    <inertial>
+        <mass value="10000" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="10000" ixy="0" ixz="0" iyy="10000" iyz="0" izz="10000" />
+    </inertial>
+    <visual>
+        <origin xyz=" 0 0 0 " rpy="0 0 0" />
+        <geometry>
+            <box size="0.6 0.6 0.6" />
+        </geometry>
+        <material name="blue"/>
+    </visual>
+    <collision>
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+  <surface>
+    <contact>
+      <ode>
+        <min_depth>0.001</min_depth>
+      </ode>
+    </contact>
+  </surface>
+        <geometry>
+            <box size="0.99 1.30 0.6" />
+        </geometry>
+        <material name="blue"/>
+    </collision>
+  </link>
+  <gazebo reference="table">
+    <material>Gazebo/Blue</material>
+</gazebo>
+</robot>

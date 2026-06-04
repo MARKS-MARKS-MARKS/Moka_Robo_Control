@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中华传统文化机器人</title>
+    <style>
+        :root {
+            --ink: #f8fafc;
+            --muted: #b9c2c9;
+            --gold: #f4d58d;
+            --cyan: #38d3ff;
+            --line: rgba(148, 163, 184, 0.28);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            margin: 0;
+        }
+
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+            color: var(--ink);
+            background: #070b0f;
+            overflow-x: hidden;
+        }
+
+        .page {
+            position: relative;
+            min-height: 100vh;
+            isolation: isolate;
+            background:
+                linear-gradient(90deg, rgba(5, 8, 12, 0.12) 0%, rgba(5, 8, 12, 0.2) 38%, rgba(5, 8, 12, 0.74) 64%, rgba(5, 8, 12, 0.94) 100%),
+                linear-gradient(180deg, rgba(5, 8, 12, 0.05), rgba(5, 8, 12, 0.35)),
+                url("./UI页面.png") center center / cover no-repeat;
+        }
+
+        .page::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(circle at 73% 17%, rgba(56, 211, 255, 0.14), transparent 22rem),
+                radial-gradient(circle at 62% 73%, rgba(244, 213, 141, 0.1), transparent 24rem);
+            pointer-events: none;
+        }
+
+        .shell {
+            min-height: 100vh;
+            display: grid;
+            grid-template-columns: minmax(24px, 1fr) minmax(0, 1180px) minmax(24px, 1fr);
+            align-items: center;
+            padding: 32px 0;
+        }
+
+        .hero {
+            grid-column: 2;
+            display: grid;
+            grid-template-columns: minmax(0, 0.95fr) minmax(380px, 0.75fr);
+            align-items: center;
+            gap: 48px;
+            width: 100%;
+        }
+
+        .spacer {
+            min-height: 62vh;
+        }
+
+        .content {
+            max-width: 560px;
+            justify-self: end;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--gold);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .eyebrow::before {
+            content: "";
+            width: 42px;
+            height: 1px;
+            background: linear-gradient(90deg, var(--gold), transparent);
+        }
+
+        h1 {
+            margin: 18px 0 0;
+            font-size: clamp(42px, 6.2vw, 84px);
+            line-height: 1.04;
+            font-weight: 900;
+            letter-spacing: 0;
+            text-wrap: balance;
+            text-shadow: 0 18px 46px rgba(0, 0, 0, 0.62);
+        }
+
+        .subtitle {
+            margin: 22px 0 0;
+            max-width: 520px;
+            color: var(--muted);
+            font-size: clamp(15px, 1.8vw, 19px);
+            line-height: 1.8;
+            text-shadow: 0 8px 28px rgba(0, 0, 0, 0.66);
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 18px;
+            margin-top: 42px;
+            max-width: 360px;
+        }
+
+        .action {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 76px;
+            padding: 0 32px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--ink);
+            text-decoration: none;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: 0;
+            background: rgba(10, 18, 26, 0.58);
+            box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(12px);
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .action.primary {
+            border-color: rgba(244, 213, 141, 0.72);
+            background: linear-gradient(135deg, rgba(127, 86, 34, 0.88), rgba(30, 42, 49, 0.72));
+        }
+
+        .action.secondary {
+            border-color: rgba(56, 211, 255, 0.58);
+            background: linear-gradient(135deg, rgba(10, 28, 38, 0.82), rgba(16, 32, 39, 0.66));
+        }
+
+        .action:hover,
+        .action:focus-visible {
+            transform: translateY(-2px);
+            border-color: rgba(248, 250, 252, 0.76);
+            box-shadow: 0 24px 58px rgba(0, 0, 0, 0.46);
+            outline: none;
+        }
+
+        .meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 28px;
+            color: rgba(226, 232, 240, 0.78);
+            font-size: 12px;
+            line-height: 1.7;
+        }
+
+        .meta span {
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 999px;
+            padding: 5px 10px;
+            background: rgba(2, 6, 10, 0.36);
+        }
+
+        @media (max-width: 860px) {
+            .page {
+                background:
+                    linear-gradient(180deg, rgba(5, 8, 12, 0.18) 0%, rgba(5, 8, 12, 0.72) 52%, rgba(5, 8, 12, 0.96) 100%),
+                    url("./UI页面.png") 28% center / cover no-repeat;
+            }
+
+            .shell {
+                align-items: end;
+                padding: 28px 0;
+            }
+
+            .hero {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+
+            .spacer {
+                min-height: 44vh;
+            }
+
+            .content {
+                justify-self: start;
+                max-width: 100%;
+            }
+
+            .actions {
+                margin-top: 30px;
+            }
+
+            .action {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <div class="shell">
+            <section class="hero" aria-label="中华传统文化机器人入口">
+                <div class="spacer" aria-hidden="true"></div>
+                <div class="content">
+                    <div class="eyebrow">Culture Robotics</div>
+                    <h1>中华传统文化机器人</h1>
+                    <p class="subtitle">融合机械臂控制、汉字书写与智能对弈，把传统书写意象转化为可交互的机器人体验。</p>
+                    <nav class="actions" aria-label="功能入口">
+                        <a class="action primary" href="./writing.html">写字</a>
+                        <a class="action secondary" href="./tictactoe.html">下井字棋</a>
+                    </nav>
+                    <div class="meta" aria-label="系统能力">
+                        <span>汉字轨迹生成</span>
+                        <span>井字棋 AI</span>
+                        <span>机械臂书写控制</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+</body>
+</html>

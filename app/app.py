@@ -1,9 +1,13 @@
 import asyncio
+import base64
 import json
 import math
 import os
+import re
 import threading
 import time
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -19,6 +23,10 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
 TEACH_PATH_FILE = PROJECT_ROOT / "teach_path.txt"
+QA_PROVIDER = (os.environ.get("QA_PROVIDER") or "openai").strip().lower()
+QA_VISION_MODEL = os.environ.get("QA_VISION_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4.1-mini"
+ZHIPU_BASE_URL = (os.environ.get("ZHIPU_BASE_URL") or "https://api.z.ai/api/paas/v4").rstrip("/")
+ZHIPU_MODEL = os.environ.get("ZHIPU_MODEL") or "glm-5v-turbo"
 ENV_HANZI_DATA_DIR = os.environ.get("HANZI_DATA_DIR")
 HANZI_DATA_DIRS = [
     Path(ENV_HANZI_DATA_DIR).expanduser() if ENV_HANZI_DATA_DIR else None,
@@ -38,6 +46,154 @@ else:
     CAMERA_IMPORT_ERROR = ""
 
 camera_lock = threading.Lock()
+
+
+def clean_answer_text(raw_answer: str, max_chars: int = 3) -> str:
+    text = str(raw_answer or "").strip()
+    math_result = re.search(r"(?:等于|答案是|答案为|结果是|结果为)\s*([0-9A-Za-z\u4e00-\u9fff+\-*/×÷=]{1,12})", text)
+    if math_result:
+        text = math_result.group(1)
+    text = re.sub(r"\s+", "", text)
+    text = re.sub(r"^(答案是|答案为|结果是|结果为|所以|答[:：]?|答案[:：]?)", "", text)
+    text = re.sub(r"[，。！？、；：,.!?;:\"'“”‘’（）()【】\[\]{}<>《》\n\r\t]", "", text)
+    text = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff+\-*/×÷=]", "", text)
+    if not text:
+        text = "看不清"
+    return text[: max(1, int(max_chars or 3))]
+
+
+def _extract_response_text(payload: dict) -> str:
+    output_text = payload.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    chunks = []
+    for item in payload.get("output", []) or []:
+        for content in item.get("content", []) or []:
+            text = content.get("text")
+            if isinstance(text, str):
+                chunks.append(text)
+    return "\n".join(chunks).strip()
+
+
+def _call_openai_vision_answer(image_base64: str, max_answer_chars: int) -> tuple[str, str]:
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("未配置 OPENAI_API_KEY，无法调用视觉模型")
+
+    prompt = (
+        "请读取图片中的手写或印刷题目，并给出最短答案。"
+        f"只输出答案本身，不要解释。答案限制在 {max_answer_chars} 个中文字符以内。"
+        "如果无法识别，请输出“看不清”。"
+    )
+    request_payload = {
+        "model": QA_VISION_MODEL,
+        "input": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": prompt},
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:image/jpeg;base64,{image_base64}",
+                        "detail": "high",
+                    },
+                ],
+            }
+        ],
+        "max_output_tokens": 80,
+    }
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/responses",
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"视觉模型调用失败: HTTP {exc.code} {detail[:300]}")
+    except Exception as exc:
+        raise RuntimeError(f"视觉模型调用失败: {exc}")
+
+    raw_answer = _extract_response_text(payload)
+    return raw_answer, clean_answer_text(raw_answer, max_answer_chars)
+
+
+def _call_zhipu_answer(
+    question_text: str,
+    image_base64: str,
+    max_answer_chars: int,
+) -> tuple[str, str]:
+    api_key = os.environ.get("ZHIPU_API_KEY")
+    if not api_key:
+        raise RuntimeError("未配置 ZHIPU_API_KEY，无法调用智谱 GLM-5V-Turbo")
+
+    question_text = str(question_text or "").strip()
+    image_base64 = str(image_base64 or "").strip()
+    if not question_text and not image_base64:
+        raise RuntimeError("GLM-5V-Turbo 需要 imageBase64 或 questionText")
+
+    prompt = (
+        "请读取图片中的手写或印刷题目，并给出最短答案。"
+        f"只输出答案本身，不要解释。答案限制在 {max_answer_chars} 个中文字符以内。"
+        "如果无法识别，请输出“看不清”。"
+    )
+    content = []
+    if image_base64:
+        content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+            }
+        )
+    if question_text:
+        content.append({"type": "text", "text": f"{prompt}\n题目：{question_text}"})
+    else:
+        content.append({"type": "text", "text": prompt})
+
+    request_payload = {
+        "model": ZHIPU_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": content,
+            },
+        ],
+        "thinking": {"type": "disabled"},
+        "do_sample": False,
+        "temperature": 0,
+        "max_tokens": 80,
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        f"{ZHIPU_BASE_URL}/chat/completions",
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"智谱 GLM 调用失败: HTTP {exc.code} {detail[:300]}")
+    except Exception as exc:
+        raise RuntimeError(f"智谱 GLM 调用失败: {exc}")
+
+    choices = payload.get("choices") or []
+    if not choices:
+        raise RuntimeError("智谱 GLM 返回结果为空")
+    raw_answer = choices[0].get("message", {}).get("content", "")
+    return raw_answer, clean_answer_text(raw_answer, max_answer_chars)
 
 
 def build_robot_command(payload: dict) -> str:
@@ -144,6 +300,44 @@ def _mjpeg_camera_stream():
         camera_lock.release()
 
 
+def _capture_camera_frame():
+    if dai is None or cv2 is None:
+        raise RuntimeError(f"DepthAI/CV2 未加载: {CAMERA_IMPORT_ERROR}")
+    if not camera_lock.acquire(blocking=False):
+        raise RuntimeError("相机正在预览或被占用，请先停止相机预览")
+
+    try:
+        with dai.Pipeline(dai.Device()) as pipeline:
+            cam = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+            capability = dai.ImgFrameCapability()
+            capability.size.fixed((640, 360))
+            capability.fps.fixed(20)
+            output = cam.requestOutput(capability, True)
+            queue = output.createOutputQueue(maxSize=1, blocking=False)
+
+            pipeline.start()
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                packet = queue.tryGet()
+                if packet is None:
+                    time.sleep(0.02)
+                    continue
+                frame = packet.getCvFrame()
+                ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+                if not ok:
+                    raise RuntimeError("相机图像编码失败")
+                height, width = frame.shape[:2]
+                return {
+                    "imageBase64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+                    "width": int(width),
+                    "height": int(height),
+                    "capturedAt": int(time.time() * 1000),
+                }
+            raise RuntimeError("相机采集超时")
+    finally:
+        camera_lock.release()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     os.makedirs(STATIC_DIR, exist_ok=True)
@@ -243,6 +437,72 @@ def camera_stream():
     return StreamingResponse(
         _mjpeg_camera_stream(),
         media_type="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.get("/camera/capture")
+def camera_capture():
+    ok, detail = _camera_available()
+    if not ok:
+        return JSONResponse({"ok": False, "detail": detail}, status_code=503)
+    try:
+        payload = _capture_camera_frame()
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=503)
+    return JSONResponse({"ok": True, **payload})
+
+
+@app.post("/qa/answer")
+def qa_answer(payload: dict = Body(...)):
+    provider = str(payload.get("provider") or QA_PROVIDER or "openai").strip().lower()
+    question_text = str(payload.get("questionText", "")).strip()
+    image_base64 = str(payload.get("imageBase64", "")).strip()
+    if image_base64.startswith("data:image"):
+        image_base64 = image_base64.split(",", 1)[-1]
+
+    max_answer_chars = int(payload.get("maxAnswerChars", 3) or 3)
+    max_answer_chars = min(3, max(1, max_answer_chars))
+
+    if provider in {"zhipu", "glm", "glm-5-turbo", "glm-5v-turbo"}:
+        if not question_text and not image_base64:
+            return JSONResponse({"ok": False, "detail": "缺少 imageBase64 或 questionText"}, status_code=400)
+        try:
+            raw_answer, clean_answer = _call_zhipu_answer(question_text, image_base64, max_answer_chars)
+        except Exception as exc:
+            return JSONResponse({"ok": False, "detail": str(exc)}, status_code=503)
+        return JSONResponse(
+            {
+                "ok": True,
+                "provider": "zhipu",
+                "model": ZHIPU_MODEL,
+                "question": question_text,
+                "rawAnswer": raw_answer,
+                "cleanAnswer": clean_answer,
+                "maxAnswerChars": max_answer_chars,
+            }
+        )
+
+    if provider != "openai":
+        return JSONResponse({"ok": False, "detail": f"不支持的 QA provider: {provider}"}, status_code=400)
+
+    if not image_base64:
+        return JSONResponse({"ok": False, "detail": "缺少 imageBase64"}, status_code=400)
+
+    try:
+        raw_answer, clean_answer = _call_openai_vision_answer(image_base64, max_answer_chars)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=503)
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "provider": "openai",
+            "model": QA_VISION_MODEL,
+            "question": question_text,
+            "rawAnswer": raw_answer,
+            "cleanAnswer": clean_answer,
+            "maxAnswerChars": max_answer_chars,
+        }
     )
 
 

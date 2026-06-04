@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汉字书写机器人</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #111827; color: #f9fafb; }
+        .panel { background: #1f2937; border: 1px solid #374151; border-radius: 8px; }
+        .field { display: grid; grid-template-columns: 88px 1fr; align-items: center; gap: 8px; }
+        .field label { color: #9ca3af; font-size: 12px; font-weight: 700; }
+        .field input { background: #111827; border: 1px solid #374151; color: #fbbf24; border-radius: 6px; padding: 7px 9px; outline: none; min-width: 0; }
+        .field input:focus { border-color: #22d3ee; box-shadow: 0 0 0 1px #22d3ee33; }
+        .metric { background: #111827; border: 1px solid #374151; border-radius: 6px; padding: 8px; }
+        .metric span { display: block; color: #9ca3af; font-size: 11px; font-weight: 700; }
+        .metric strong { display: block; color: #60a5fa; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 16px; }
+        .status-pill { border: 1px solid #374151; background: #111827; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+        .status-ok { background: #064e3b; border-color: #047857; color: #a7f3d0; }
+        .status-bad { background: #7f1d1d; border-color: #b91c1c; color: #fecaca; }
+        .status-warn { background: #713f12; border-color: #a16207; color: #fde68a; }
+        canvas { image-rendering: auto; }
+        textarea { background: #0f172a; border: 1px solid #374151; color: #d1d5db; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+    <main class="max-w-7xl mx-auto grid grid-cols-12 gap-4">
+        <section class="col-span-12 flex flex-col gap-3 md:flex-row md:items-center md:justify-between panel p-4">
+            <div>
+                <h1 class="text-xl font-black text-amber-300">汉字书写机器人</h1>
+                <p class="text-xs text-gray-400 mt-1">输入汉字，生成笔画轨迹，并通过现有 write_path 协议发送给机械臂。</p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                    <span id="ws-status" class="status-pill status-bad">未连接</span>
+                    <span id="page-status" class="status-pill status-warn">等待生成</span>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <button id="connect-btn" class="px-10 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-xl font-black min-w-44 shadow-lg">连接设备</button>
+                <a href="./culture-robot.html" class="px-10 py-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-xl font-black min-w-44 text-center shadow-lg">返回封面</a>
+            </div>
+        </section>
+
+        <section class="col-span-12 lg:col-span-4 panel p-4 space-y-3">
+            <h2 class="text-sm font-bold text-emerald-400 border-l-4 border-emerald-500 pl-2">书写参数</h2>
+            <div class="field"><label>文字</label><input id="text" value="永" maxlength="3"></div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="field"><label>中心X</label><input id="origin-x" type="number" value="450"></div>
+                <div class="field"><label>中心Y</label><input id="origin-y" type="number" value="0"></div>
+                <div class="field"><label>纸面Z</label><input id="paper-z" type="number" value="340"></div>
+                <div class="field"><label>抬笔</label><input id="lift" type="number" value="10"></div>
+                <div class="field"><label>宽(mm)</label><input id="width-mm" type="number" value="80"></div>
+                <div class="field"><label>高(mm)</label><input id="height-mm" type="number" value="80"></div>
+                <div class="field"><label>采样(mm)</label><input id="sample-mm" type="number" value="6" step="0.5"></div>
+                <div class="field"><label>点上限</label><input id="point-limit" type="number" value="512"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button id="generate-btn" class="bg-blue-600 hover:bg-blue-500 rounded py-3 font-bold">生成预览</button>
+                <button id="send-btn" class="bg-emerald-600 hover:bg-emerald-500 rounded py-3 font-bold">发送书写</button>
+                <button id="copy-json-btn" class="bg-slate-600 hover:bg-slate-500 rounded py-3 font-bold">复制 JSON</button>
+                <button id="copy-csv-btn" class="bg-slate-600 hover:bg-slate-500 rounded py-3 font-bold">复制 CSV</button>
+            </div>
+            <div id="notice" class="text-xs text-gray-400 leading-5"></div>
+        </section>
+
+        <section class="col-span-12 lg:col-span-8 panel p-4 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-bold text-yellow-400 border-l-4 border-yellow-500 pl-2">轨迹预览</h2>
+                <div id="status" class="text-xs text-gray-400 font-mono">等待生成</div>
+            </div>
+            <canvas id="preview" width="900" height="420" class="w-full rounded bg-white border border-gray-700"></canvas>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div class="metric"><span>字符数</span><strong id="m-chars">0</strong></div>
+                <div class="metric"><span>笔画数</span><strong id="m-strokes">0</strong></div>
+                <div class="metric"><span>航点数</span><strong id="m-points">0</strong></div>
+                <div class="metric"><span>缺字数</span><strong id="m-missing">0</strong></div>
+                <div class="metric"><span>最大跳距</span><strong id="m-jump">0</strong></div>
+            </div>
+        </section>
+
+        <section class="col-span-12 panel p-4 space-y-3">
+            <h2 class="text-sm font-bold text-purple-400 border-l-4 border-purple-500 pl-2">生成航点</h2>
+            <textarea id="output" class="w-full h-56 p-3" spellcheck="false"></textarea>
+        </section>
+    </main>
+
+    <script>
+        const dataCache = new Map();
+        const fallbackStrokes = [
+            [[-0.35, 0.30], [0.35, 0.30]],
+            [[0.00, 0.42], [0.00, -0.42]],
+            [[-0.30, -0.10], [0.30, -0.10]]
+        ];
+        const yongFallbackStrokes = [
+            [[-0.04, 0.46], [0.02, 0.34], [0.08, 0.24]],
+            [[-0.26, 0.22], [0.28, 0.22]],
+            [[0.00, 0.22], [0.00, -0.34], [-0.08, -0.44]],
+            [[-0.04, 0.08], [-0.28, -0.16], [-0.38, -0.34]],
+            [[0.04, 0.06], [0.24, -0.12], [0.42, -0.36]],
+            [[-0.18, -0.02], [0.18, -0.02]],
+            [[-0.12, -0.18], [0.14, -0.18]]
+        ];
+
+        let ws = null;
+        let lastResult = null;
+
+        const backendHost = () => (location.port === "9010" || location.protocol === "file:")
+            ? "127.0.0.1:9002"
+            : location.host;
+        const backendHanziApi = () => `${location.protocol === "https:" ? "https" : "http"}://${backendHost()}/hanzi`;
+        const websocketUrl = () => `${location.protocol === "https:" ? "wss" : "ws"}://${backendHost()}/ws`;
+
+        const setWsStatus = (text, state) => {
+            const el = document.getElementById("ws-status");
+            el.textContent = text;
+            el.className = "status-pill";
+            if(state === "ok") el.classList.add("status-ok");
+            else if(state === "warn") el.classList.add("status-warn");
+            else el.classList.add("status-bad");
+        };
+
+        const setPageStatus = (text, state = "warn") => {
+            const el = document.getElementById("page-status");
+            el.textContent = text;
+            el.className = "status-pill";
+            if(state === "ok") el.classList.add("status-ok");
+            else if(state === "bad") el.classList.add("status-bad");
+            else el.classList.add("status-warn");
+        };
+
+        const value = (id, fallback) => {
+            const parsed = parseFloat(document.getElementById(id).value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        };
+
+        const isValidHanziData = (data) => data && Array.isArray(data.medians) && data.medians.length > 0;
+
+        const loadCharData = async (char) => {
+            if(dataCache.has(char)) return dataCache.get(char);
+            const sources = [
+                {
+                    source: "backend",
+                    label: "hanzi-writer-data",
+                    url: `${backendHanziApi()}/${encodeURIComponent(char)}`,
+                    extract: payload => payload && payload.ok ? payload.data : null
+                },
+                {
+                    source: "local-static",
+                    label: `${char}.json`,
+                    url: `./hanzi-data/${encodeURIComponent(char)}.json`,
+                    extract: payload => payload
+                }
+            ];
+
+            for(const item of sources) {
+                try {
+                    const resp = await fetch(item.url, { cache: "no-store" });
+                    if(!resp.ok) continue;
+                    const payload = await resp.json();
+                    const data = item.extract(payload);
+                    if(isValidHanziData(data)) {
+                        const result = { data, source: item.source, sourceFile: item.label };
+                        dataCache.set(char, result);
+                        return result;
+                    }
+                } catch(e) {}
+            }
+            dataCache.set(char, null);
+            return null;
+        };
+
+        const normalizeMedians = (medians) => {
+            const allPoints = medians.flat().filter(p => Array.isArray(p) && p.length >= 2);
+            if(allPoints.length === 0) return { strokes: [], bounds: null };
+            const xs = allPoints.map(p => p[0]);
+            const ys = allPoints.map(p => p[1]);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const rangeX = Math.max(1, maxX - minX);
+            const rangeY = Math.max(1, maxY - minY);
+            const scale = Math.max(rangeX, rangeY);
+            return {
+                strokes: medians.map(stroke => stroke
+                    .filter(p => Array.isArray(p) && p.length >= 2)
+                    .map(([x, y]) => [(x - centerX) / scale, (y - centerY) / scale])
+                ).filter(stroke => stroke.length > 0),
+                bounds: { minX, maxX, minY, maxY, centerX, centerY, rangeX, rangeY, scale }
+            };
+        };
+
+        const getStrokes = async (char) => {
+            const result = await loadCharData(char);
+            if(result) {
+                const normalized = normalizeMedians(result.data.medians);
+                return { strokes: normalized.strokes, source: result.source, sourceFile: result.sourceFile, bounds: normalized.bounds };
+            }
+            if(char === "永") return { strokes: yongFallbackStrokes, source: "fallback", sourceFile: "fallback-yong", bounds: null };
+            return { strokes: fallbackStrokes, source: "fallback", sourceFile: "fallback-generic", bounds: null };
+        };
+
+        const distance2d = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+        const simplifyPaperStroke = (stroke, minDistanceMm) => {
+            if(stroke.length <= 2) return stroke;
+            const simplified = [stroke[0]];
+            for(let i = 1; i < stroke.length - 1; i++) {
+                if(distance2d(stroke[i], simplified[simplified.length - 1]) >= minDistanceMm) {
+                    simplified.push(stroke[i]);
+                }
+            }
+            const last = stroke[stroke.length - 1];
+            if(distance2d(last, simplified[simplified.length - 1]) > 0) simplified.push(last);
+            return simplified;
+        };
+
+        const resamplePaperStroke = (stroke, spacingMm) => {
+            if(stroke.length <= 1) return stroke;
+            const result = [stroke[0]];
+            let carry = 0;
+            for(let i = 1; i < stroke.length; i++) {
+                let prev = stroke[i - 1];
+                const curr = stroke[i];
+                let segmentLength = distance2d(prev, curr);
+                if(segmentLength <= 0.0001) continue;
+                while(carry + segmentLength >= spacingMm) {
+                    const t = (spacingMm - carry) / segmentLength;
+                    const next = {
+                        x: prev.x + (curr.x - prev.x) * t,
+                        y: prev.y + (curr.y - prev.y) * t
+                    };
+                    result.push(next);
+                    prev = next;
+                    segmentLength = distance2d(prev, curr);
+                    carry = 0;
+                    if(segmentLength <= 0.0001) break;
+                }
+                carry += segmentLength;
+            }
+            const last = stroke[stroke.length - 1];
+            if(distance2d(last, result[result.length - 1]) > 0.001) result.push(last);
+            return result;
+        };
+
+        const generateTrajectory = async () => {
+            const text = document.getElementById("text").value.trim() || "永";
+            const chars = [...text].slice(0, 3);
+            const originX = value("origin-x", 450);
+            const originY = value("origin-y", 0);
+            const paperZ = value("paper-z", 340);
+            const lift = value("lift", 10);
+            const widthMm = Math.min(140, Math.max(30, value("width-mm", 80)));
+            const heightMm = Math.min(140, Math.max(30, value("height-mm", 80)));
+            const sampleSpacingMm = Math.min(20, Math.max(2, value("sample-mm", 6)));
+            const pointLimit = Math.max(0, Math.floor(value("point-limit", 512)));
+            const rx = 3.14;
+            const ry = 0;
+            const rz = 0;
+            const charCount = Math.max(1, chars.length);
+            const points = [];
+            const strokesMeta = [];
+            const missing = [];
+
+            const makePose = (x, y, z, pen, char, strokeIndex) => ({
+                x: Number(x.toFixed(3)),
+                y: Number(y.toFixed(3)),
+                z: Number(z.toFixed(3)),
+                rx, ry, rz, pen, char, strokeIndex
+            });
+
+            const mapToPaper = (nx, ny, charCenterNormX, charScaleX) => ({
+                x: originX + (charCenterNormX + nx * charScaleX) * widthMm,
+                y: originY + ny * heightMm
+            });
+
+            for(let ci = 0; ci < chars.length; ci++) {
+                const char = chars[ci];
+                const { strokes, source, sourceFile, bounds } = await getStrokes(char);
+                if(source === "fallback") missing.push(char);
+                const charCenterNormX = (ci - (charCount - 1) / 2) / charCount;
+                const charScaleX = 1 / charCount;
+                strokesMeta.push({ char, source, sourceFile, strokeCount: strokes.length, bounds });
+                strokes.forEach((stroke, si) => {
+                    const paperStroke = stroke.map(([nx, ny]) => mapToPaper(nx, ny, charCenterNormX, charScaleX));
+                    const cleanedStroke = simplifyPaperStroke(paperStroke, Math.max(0.5, sampleSpacingMm * 0.35));
+                    const sampledStroke = resamplePaperStroke(cleanedStroke, sampleSpacingMm);
+                    if(!sampledStroke.length) return;
+                    const first = sampledStroke[0];
+                    points.push(makePose(first.x, first.y, paperZ + lift, "up", char, si));
+                    points.push(makePose(first.x, first.y, paperZ, "down", char, si));
+                    sampledStroke.forEach(p => points.push(makePose(p.x, p.y, paperZ, "down", char, si)));
+                    const last = sampledStroke[sampledStroke.length - 1];
+                    points.push(makePose(last.x, last.y, paperZ + lift, "up", char, si));
+                });
+            }
+
+            const limited = pointLimit > 0 && points.length > pointLimit ? points.slice(0, pointLimit) : points;
+            return {
+                text: chars.join(""),
+                points: limited,
+                originalPointCount: points.length,
+                truncated: limited.length !== points.length,
+                missing,
+                strokesMeta,
+                originX,
+                originY,
+                paperZ,
+                lift,
+                widthMm,
+                heightMm,
+                sampleSpacingMm,
+                pointLimit
+            };
+        };
+
+        const toRobotPoints = (points) => points.map(p => [p.x, p.y, p.z, p.rx, p.ry, p.rz]);
+
+        const drawPreview = (result) => {
+            const canvas = document.getElementById("preview");
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "#e5e7eb";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(40, 30, canvas.width - 80, canvas.height - 60);
+
+            const toCanvas = (p) => ({
+                x: ((p.x - result.originX) / result.widthMm + 0.5) * (canvas.width - 80) + 40,
+                y: (0.5 - (p.y - result.originY) / result.heightMm) * (canvas.height - 60) + 30
+            });
+
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.lineWidth = 7;
+            ctx.strokeStyle = "#111827";
+            ctx.beginPath();
+            result.points.forEach((p, i) => {
+                const cp = toCanvas(p);
+                if(i === 0 || p.pen === "up") ctx.moveTo(cp.x, cp.y);
+                else ctx.lineTo(cp.x, cp.y);
+            });
+            ctx.stroke();
+
+            ctx.fillStyle = "#ef4444";
+            result.points.forEach((p) => {
+                const cp = toCanvas(p);
+                ctx.beginPath();
+                ctx.arc(cp.x, cp.y, p.pen === "up" ? 3 : 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        };
+
+        const maxJump = (points) => {
+            let max = 0;
+            for(let i = 1; i < points.length; i++) {
+                const a = points[i - 1];
+                const b = points[i];
+                max = Math.max(max, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+            }
+            return max;
+        };
+
+        const toCsv = (points) => {
+            const header = "index,char,strokeIndex,x,y,z,rx,ry,rz,pen";
+            const rows = points.map((p, i) => [i, p.char, p.strokeIndex, p.x, p.y, p.z, p.rx, p.ry, p.rz, p.pen].join(","));
+            return [header, ...rows].join("\n");
+        };
+
+        const updateMetrics = (result) => {
+            document.getElementById("m-chars").innerText = result.text.length;
+            document.getElementById("m-strokes").innerText = result.strokesMeta.reduce((sum, item) => sum + item.strokeCount, 0);
+            document.getElementById("m-points").innerText = `${result.points.length}${result.truncated ? "/" + result.originalPointCount : ""}`;
+            document.getElementById("m-missing").innerText = [...new Set(result.missing)].length;
+            document.getElementById("m-jump").innerText = maxJump(result.points).toFixed(1);
+            document.getElementById("status").innerText = result.truncated ? "已截断点数" : "生成完成";
+            document.getElementById("notice").innerText = result.missing.length
+                ? `缺少字库数据，已使用兜底笔画：${[...new Set(result.missing)].join("")}`
+                : `全部字符使用字库 medians：${result.strokesMeta.map(item => `${item.char}=${item.sourceFile}`).join("，")}`;
+        };
+
+        const render = async () => {
+            if(location.protocol === "file:") {
+                document.getElementById("notice").innerText = "请通过 HTTP 打开页面，例如 http://127.0.0.1:9010/writing.html。";
+                document.getElementById("status").innerText = "请用 HTTP 打开";
+                return null;
+            }
+            document.getElementById("status").innerText = "生成中...";
+            lastResult = await generateTrajectory();
+            drawPreview(lastResult);
+            updateMetrics(lastResult);
+            document.getElementById("output").value = JSON.stringify({
+                text: lastResult.text,
+                points: toRobotPoints(lastResult.points),
+                meta: {
+                    originalPointCount: lastResult.originalPointCount,
+                    emittedPointCount: lastResult.points.length,
+                    truncated: lastResult.truncated,
+                    sampleSpacingMm: lastResult.sampleSpacingMm,
+                    missing: [...new Set(lastResult.missing)],
+                    strokes: lastResult.strokesMeta
+                }
+            }, null, 2);
+            setPageStatus(lastResult.truncated ? "轨迹已截断" : "预览已生成", lastResult.truncated ? "bad" : "ok");
+            return lastResult;
+        };
+
+        const connectRobot = () => {
+            if(ws && ws.readyState === WebSocket.OPEN) return;
+            setWsStatus("连接中", "warn");
+            ws = new WebSocket(websocketUrl());
+            ws.onopen = () => setWsStatus("已连接", "ok");
+            ws.onclose = () => setWsStatus("未连接", "bad");
+            ws.onerror = () => setWsStatus("连接错误", "bad");
+            ws.onmessage = () => {};
+        };
+
+        const pathInSafeRange = (points) => points.every(p => (
+            Math.abs(p.x) <= 1200 && Math.abs(p.y) <= 1200 && p.z >= -100 && p.z <= 1200
+        ));
+
+        const sendWriting = async () => {
+            if(!ws || ws.readyState !== WebSocket.OPEN) {
+                setPageStatus("请先连接设备", "bad");
+                return;
+            }
+            const result = await render();
+            if(!result || result.points.length < 4) {
+                setPageStatus("没有可发送轨迹", "bad");
+                return;
+            }
+            if(result.truncated) {
+                setPageStatus(`轨迹超过上限 ${result.pointLimit}，未发送`, "bad");
+                return;
+            }
+            if(!pathInSafeRange(result.points)) {
+                setPageStatus("轨迹超出安全范围", "bad");
+                return;
+            }
+            ws.send(JSON.stringify({ type: "write_path", points: toRobotPoints(result.points), lift: result.lift }));
+            setPageStatus(`已发送 ${result.points.length} 个航点`, "ok");
+        };
+
+        const copyText = async (text) => {
+            await navigator.clipboard.writeText(text);
+            setPageStatus("已复制", "ok");
+        };
+
+        document.getElementById("connect-btn").addEventListener("click", connectRobot);
+        document.getElementById("generate-btn").addEventListener("click", render);
+        document.getElementById("send-btn").addEventListener("click", sendWriting);
+        document.getElementById("copy-json-btn").addEventListener("click", () => copyText(document.getElementById("output").value));
+        document.getElementById("copy-csv-btn").addEventListener("click", () => {
+            if(!lastResult) return;
+            copyText(toCsv(lastResult.points));
+        });
+        window.addEventListener("load", render);
+    </script>
+</body>
+</html>

@@ -5,7 +5,7 @@ cd moka
 sudo g++ -o test.out wangye.cpp axis.cpp axis.h general_6s.cpp general_6s.h struct_define.h libethercat.a -lrt -lpthread -std=c++11
 sudo ./test.out
 
-cd moka /app
+cd app
 python3 app.py
 
  ---> http://0.0.0.0:9002

@@ -101,8 +101,8 @@ std::deque<double> angle_deque_out;
 std::deque<int> tor_deque_out;
 bool count_start = 0;
 std::atomic<bool> g_estop_requested(false);
-static const size_t MAX_WRITE_POINTS = 512;
-static const size_t MAX_TRAJECTORY_QUEUE_VALUES = 600000;
+static const size_t MAX_WRITE_POINTS = 1024;
+static const size_t MAX_TRAJECTORY_QUEUE_VALUES = 2000000;
 static io_out IO_out;
 
 struct PosePoint {
