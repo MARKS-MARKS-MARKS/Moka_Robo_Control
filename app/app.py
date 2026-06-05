@@ -55,6 +55,273 @@ else:
 camera_lock = threading.Lock()
 
 
+def _rotation_matrix_to_rpy(matrix):
+    sy = math.sqrt(matrix[0][0] * matrix[0][0] + matrix[1][0] * matrix[1][0])
+    singular = sy < 1e-6
+    if not singular:
+        roll = math.atan2(matrix[2][1], matrix[2][2])
+        pitch = math.atan2(-matrix[2][0], sy)
+        yaw = math.atan2(matrix[1][0], matrix[0][0])
+    else:
+        roll = math.atan2(-matrix[1][2], matrix[1][1])
+        pitch = math.atan2(-matrix[2][0], sy)
+        yaw = 0.0
+    return [roll, pitch, yaw]
+
+
+def _matmul3(a, b):
+    return [
+        [sum(a[row][k] * b[k][col] for k in range(3)) for col in range(3)]
+        for row in range(3)
+    ]
+
+
+def _rx(angle_rad):
+    c = math.cos(angle_rad)
+    s = math.sin(angle_rad)
+    return [[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]]
+
+
+def _decode_image_base64(image_base64: str):
+    if cv2 is None:
+        raise RuntimeError(f"OpenCV 未加载: {CAMERA_IMPORT_ERROR}")
+    import numpy as np
+
+    raw = str(image_base64 or "").strip()
+    if raw.startswith("data:image"):
+        raw = raw.split(",", 1)[-1]
+    if not raw:
+        raise RuntimeError("缺少 imageBase64")
+    image_bytes = base64.b64decode(raw)
+    image_array = np.frombuffer(image_bytes, dtype=np.uint8)
+    frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    if frame is None:
+        raise RuntimeError("图像解码失败")
+    return frame
+
+
+def _camera_matrix(width: int, height: int, payload: dict):
+    import numpy as np
+
+    fx = payload.get("fx") or os.environ.get("OAKD_FX") or os.environ.get("CAMERA_FX")
+    fy = payload.get("fy") or os.environ.get("OAKD_FY") or os.environ.get("CAMERA_FY")
+    cx = payload.get("cx") or os.environ.get("OAKD_CX") or os.environ.get("CAMERA_CX")
+    cy = payload.get("cy") or os.environ.get("OAKD_CY") or os.environ.get("CAMERA_CY")
+
+    estimated = False
+    if fx is None or fy is None:
+        # Conservative OAK-D RGB fallback. Replace with calibrated intrinsics for
+        # millimeter-grade pose; rotation is still useful for first-pass leveling.
+        focal = max(width, height) * 1.35
+        fx = fx or focal
+        fy = fy or focal
+        estimated = True
+    if cx is None:
+        cx = width / 2.0
+        estimated = True
+    if cy is None:
+        cy = height / 2.0
+        estimated = True
+
+    matrix = np.array(
+        [[float(fx), 0.0, float(cx)], [0.0, float(fy), float(cy)], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+    dist = np.zeros((5, 1), dtype=np.float64)
+    return matrix, dist, estimated
+
+
+def _reprojection_error(object_points, image_points, rvec, tvec, camera_matrix, dist_coeffs):
+    import numpy as np
+
+    projected, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, dist_coeffs)
+    projected = projected.reshape(-1, 2)
+    image_points = image_points.reshape(-1, 2)
+    err = np.linalg.norm(projected - image_points, axis=1)
+    return float(np.mean(err)), float(np.max(err))
+
+
+def _analyze_checkerboard_pose(payload: dict, frame_override=None, depth_frame=None, capture_meta=None):
+    if cv2 is None:
+        raise RuntimeError(f"OpenCV 未加载: {CAMERA_IMPORT_ERROR}")
+    import numpy as np
+
+    frame = frame_override if frame_override is not None else _decode_image_base64(payload.get("imageBase64", ""))
+    height, width = frame.shape[:2]
+    inner_cols = int(payload.get("innerCols", 9) or 9)
+    inner_rows = int(payload.get("innerRows", 13) or 13)
+    square_size = float(payload.get("squareSizeMm", 30.0) or 30.0)
+    paper_z = float(payload.get("paperZMm", 550.0) or 550.0)
+    camera_tilt_deg = float(payload.get("cameraTiltDeg", 15.0) or 15.0)
+
+    if inner_cols < 3 or inner_rows < 3:
+        raise RuntimeError("棋盘内角点行列数至少为 3")
+    if not math.isfinite(square_size) or square_size <= 0:
+        raise RuntimeError("格子边长必须为正数")
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    pattern_size = (inner_cols, inner_rows)
+    flags = cv2.CALIB_CB_NORMALIZE_IMAGE | cv2.CALIB_CB_EXHAUSTIVE | cv2.CALIB_CB_ACCURACY
+
+    used_detector = "findChessboardCornersSB"
+    found = False
+    corners = None
+    if hasattr(cv2, "findChessboardCornersSB"):
+        found, corners = cv2.findChessboardCornersSB(gray, pattern_size, flags)
+    if not found:
+        used_detector = "findChessboardCorners"
+        classic_flags = cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
+        found, corners = cv2.findChessboardCorners(gray, pattern_size, classic_flags)
+        if found:
+            criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001)
+            corners = cv2.cornerSubPix(gray, corners, (7, 7), (-1, -1), criteria)
+
+    overlay = frame.copy()
+    corner_points = []
+    line_segments = []
+    axis_segments = []
+    pose = None
+    quality = {
+        "found": bool(found),
+        "detector": used_detector,
+        "cornerCount": 0,
+        "meanReprojectionErrorPx": None,
+        "maxReprojectionErrorPx": None,
+        "cameraMatrixEstimated": True,
+        "oakDepthMedianMm": None,
+        "oakDepthSamples": 0,
+    }
+
+    if found and corners is not None:
+        corners = corners.reshape(-1, 2).astype(np.float32)
+        quality["cornerCount"] = int(len(corners))
+
+        object_points = np.zeros((inner_rows * inner_cols, 3), np.float32)
+        object_points[:, :2] = np.mgrid[0:inner_cols, 0:inner_rows].T.reshape(-1, 2)
+        object_points *= float(square_size)
+
+        camera_matrix, dist_coeffs, estimated_intrinsics = _camera_matrix(width, height, payload)
+        quality["cameraMatrixEstimated"] = bool(estimated_intrinsics)
+        success, rvec, tvec = cv2.solvePnP(
+            object_points,
+            corners,
+            camera_matrix,
+            dist_coeffs,
+            flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+        if not success:
+            raise RuntimeError("solvePnP 未能求解棋盘位姿")
+        if hasattr(cv2, "solvePnPRefineLM"):
+            rvec, tvec = cv2.solvePnPRefineLM(object_points, corners, camera_matrix, dist_coeffs, rvec, tvec)
+
+        reproj_mean, reproj_max = _reprojection_error(object_points, corners, rvec, tvec, camera_matrix, dist_coeffs)
+        quality["meanReprojectionErrorPx"] = reproj_mean
+        quality["maxReprojectionErrorPx"] = reproj_max
+
+        if depth_frame is not None:
+            depth = depth_frame
+            if depth.shape[:2] != (height, width):
+                depth = cv2.resize(depth, (width, height), interpolation=cv2.INTER_NEAREST)
+            min_xy = np.floor(np.min(corners, axis=0)).astype(int)
+            max_xy = np.ceil(np.max(corners, axis=0)).astype(int)
+            pad_x = max(8, int((max_xy[0] - min_xy[0]) * 0.08))
+            pad_y = max(8, int((max_xy[1] - min_xy[1]) * 0.08))
+            x0 = max(0, min_xy[0] + pad_x)
+            y0 = max(0, min_xy[1] + pad_y)
+            x1 = min(width, max_xy[0] - pad_x)
+            y1 = min(height, max_xy[1] - pad_y)
+            if x1 > x0 and y1 > y0:
+                roi = depth[y0:y1, x0:x1].astype(np.float32)
+                roi = roi[np.isfinite(roi) & (roi > 80) & (roi < 5000)]
+                if roi.size:
+                    quality["oakDepthMedianMm"] = float(np.median(roi))
+                    quality["oakDepthSamples"] = int(roi.size)
+
+        rot_board_to_cam, _ = cv2.Rodrigues(rvec)
+        rot_cam_to_board = rot_board_to_cam.T
+        tilt_comp = _rx(math.radians(camera_tilt_deg))
+        rot_tool_to_board = _matmul3(rot_cam_to_board.tolist(), tilt_comp)
+        camera_rpy = _rotation_matrix_to_rpy(rot_cam_to_board.tolist())
+        tool_rpy = _rotation_matrix_to_rpy(rot_tool_to_board)
+
+        robot_state = get_robot_state()
+        tcp = robot_state.get("tcp") or [0, 0, paper_z, 0, 0, 0]
+        closed_loop_pose = [
+            float(tcp[0]) if len(tcp) > 0 else 0.0,
+            float(tcp[1]) if len(tcp) > 1 else 0.0,
+            paper_z,
+            tool_rpy[0],
+            tool_rpy[1],
+            tool_rpy[2],
+        ]
+
+        axis_len = square_size * 3.0
+        axis_points = np.float32([[0, 0, 0], [axis_len, 0, 0], [0, axis_len, 0], [0, 0, -axis_len]])
+        projected_axis, _ = cv2.projectPoints(axis_points, rvec, tvec, camera_matrix, dist_coeffs)
+        projected_axis = projected_axis.reshape(-1, 2)
+
+        cv2.drawChessboardCorners(overlay, pattern_size, corners.reshape(-1, 1, 2), True)
+        for idx, point in enumerate(corners):
+            x, y = int(round(point[0])), int(round(point[1]))
+            cv2.circle(overlay, (x, y), 4, (0, 255, 255), -1)
+            if idx % max(1, inner_cols // 3) == 0:
+                cv2.circle(overlay, (x, y), 10, (255, 180, 0), 1)
+
+        for row in range(inner_rows):
+            for col in range(inner_cols - 1):
+                a = corners[row * inner_cols + col]
+                b = corners[row * inner_cols + col + 1]
+                cv2.line(overlay, tuple(np.round(a).astype(int)), tuple(np.round(b).astype(int)), (0, 190, 255), 1)
+                line_segments.append({"a": [float(a[0]), float(a[1])], "b": [float(b[0]), float(b[1])]})
+        for col in range(inner_cols):
+            for row in range(inner_rows - 1):
+                a = corners[row * inner_cols + col]
+                b = corners[(row + 1) * inner_cols + col]
+                cv2.line(overlay, tuple(np.round(a).astype(int)), tuple(np.round(b).astype(int)), (70, 255, 160), 1)
+                line_segments.append({"a": [float(a[0]), float(a[1])], "b": [float(b[0]), float(b[1])]})
+
+        origin = tuple(np.round(projected_axis[0]).astype(int))
+        axis_colors = [(40, 80, 255), (60, 255, 80), (255, 80, 40)]
+        axis_names = ["X", "Y", "Z"]
+        for i in range(1, 4):
+            end = tuple(np.round(projected_axis[i]).astype(int))
+            cv2.arrowedLine(overlay, origin, end, axis_colors[i - 1], 3, tipLength=0.18)
+            cv2.putText(overlay, axis_names[i - 1], end, cv2.FONT_HERSHEY_SIMPLEX, 0.8, axis_colors[i - 1], 2)
+            axis_segments.append({"axis": axis_names[i - 1], "a": [float(projected_axis[0][0]), float(projected_axis[0][1])], "b": [float(projected_axis[i][0]), float(projected_axis[i][1])]})
+
+        corner_points = [[float(x), float(y)] for x, y in corners.tolist()]
+        pose = {
+            "cameraRpyRad": camera_rpy,
+            "cameraRpyDeg": [math.degrees(v) for v in camera_rpy],
+            "toolRpyRad": tool_rpy,
+            "toolRpyDeg": [math.degrees(v) for v in tool_rpy],
+            "closedLoopPose": closed_loop_pose,
+            "boardToCameraTvecMm": [float(v) for v in tvec.reshape(-1).tolist()],
+            "paperZMm": paper_z,
+            "cameraTiltDeg": camera_tilt_deg,
+        }
+
+    ok, encoded = cv2.imencode(".jpg", overlay, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+    if not ok:
+        raise RuntimeError("标定叠加图编码失败")
+
+    return {
+        "ok": bool(found),
+        "width": int(width),
+        "height": int(height),
+        "quality": quality,
+        "pose": pose,
+        "features": {
+            "corners": corner_points,
+            "lines": line_segments[:360],
+            "axes": axis_segments,
+        },
+        "capture": capture_meta or {},
+        "overlayImageBase64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+        "detail": "棋盘识别成功" if found else "未识别到完整棋盘内角点，请调整曝光、距离或行列参数",
+    }
+
+
 def clean_answer_text(raw_answer: str, max_chars: int = 3) -> str:
     text = str(raw_answer or "").strip()
     math_result = re.search(r"(?:等于|答案是|答案为|结果是|结果为)\s*([0-9A-Za-z\u4e00-\u9fff+\-*/×÷=]{1,12})", text)
@@ -345,6 +612,120 @@ def _capture_camera_frame():
         camera_lock.release()
 
 
+def _oak_socket(*names):
+    for name in names:
+        value = getattr(dai.CameraBoardSocket, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _capture_oakd_calibration_frame(width: int = 640, height: int = 360):
+    if dai is None or cv2 is None:
+        raise RuntimeError(f"DepthAI/CV2 未加载: {CAMERA_IMPORT_ERROR}")
+    if not camera_lock.acquire(blocking=False):
+        raise RuntimeError("相机正在预览或被占用，请先停止相机预览")
+
+    try:
+        pipeline = dai.Pipeline()
+        rgb_socket = _oak_socket("CAM_A", "RGB")
+        left_socket = _oak_socket("CAM_B", "LEFT")
+        right_socket = _oak_socket("CAM_C", "RIGHT")
+
+        cam_rgb = pipeline.create(dai.node.ColorCamera)
+        if rgb_socket is not None:
+            cam_rgb.setBoardSocket(rgb_socket)
+        cam_rgb.setPreviewSize(int(width), int(height))
+        if hasattr(dai, "ColorCameraProperties"):
+            cam_rgb.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
+        cam_rgb.setInterleaved(False)
+
+        xout_rgb = pipeline.create(dai.node.XLinkOut)
+        xout_rgb.setStreamName("rgb")
+        cam_rgb.preview.link(xout_rgb.input)
+
+        depth_enabled = False
+        if left_socket is not None and right_socket is not None:
+            try:
+                mono_left = pipeline.create(dai.node.MonoCamera)
+                mono_right = pipeline.create(dai.node.MonoCamera)
+                mono_left.setBoardSocket(left_socket)
+                mono_right.setBoardSocket(right_socket)
+                mono_left.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+                mono_right.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+
+                stereo = pipeline.create(dai.node.StereoDepth)
+                if hasattr(stereo, "setDefaultProfilePreset"):
+                    stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+                if hasattr(stereo, "setLeftRightCheck"):
+                    stereo.setLeftRightCheck(True)
+                if hasattr(stereo, "setSubpixel"):
+                    stereo.setSubpixel(True)
+                if rgb_socket is not None and hasattr(stereo, "setDepthAlign"):
+                    stereo.setDepthAlign(rgb_socket)
+                mono_left.out.link(stereo.left)
+                mono_right.out.link(stereo.right)
+
+                xout_depth = pipeline.create(dai.node.XLinkOut)
+                xout_depth.setStreamName("depth")
+                stereo.depth.link(xout_depth.input)
+                depth_enabled = True
+            except Exception as exc:
+                print(f"[OAK-D] stereo depth pipeline disabled: {exc}")
+
+        with dai.Device(pipeline) as device:
+            intrinsics = None
+            try:
+                calibration = device.readCalibration()
+                if rgb_socket is not None:
+                    intrinsics = calibration.getCameraIntrinsics(rgb_socket, int(width), int(height))
+            except Exception as exc:
+                print(f"[OAK-D] failed to read calibration intrinsics: {exc}")
+
+            rgb_queue = device.getOutputQueue("rgb", maxSize=1, blocking=False)
+            depth_queue = device.getOutputQueue("depth", maxSize=1, blocking=False) if depth_enabled else None
+
+            frame = None
+            depth_frame = None
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                rgb_packet = rgb_queue.tryGet()
+                if rgb_packet is not None:
+                    frame = rgb_packet.getCvFrame()
+                if depth_queue is not None:
+                    depth_packet = depth_queue.tryGet()
+                    if depth_packet is not None:
+                        depth_frame = depth_packet.getFrame()
+                if frame is not None and (not depth_enabled or depth_frame is not None):
+                    break
+                time.sleep(0.02)
+
+            if frame is None:
+                raise RuntimeError("OAK-D RGB 图像采集超时")
+
+            ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+            if not ok:
+                raise RuntimeError("OAK-D RGB 图像编码失败")
+
+            meta = {
+                "device": "OAK-D",
+                "rgbWidth": int(frame.shape[1]),
+                "rgbHeight": int(frame.shape[0]),
+                "stereoDepth": bool(depth_frame is not None),
+                "intrinsicsFromDevice": bool(intrinsics),
+                "capturedAt": int(time.time() * 1000),
+            }
+            return {
+                "frame": frame,
+                "depthFrame": depth_frame,
+                "imageBase64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+                "intrinsics": intrinsics,
+                "meta": meta,
+            }
+    finally:
+        camera_lock.release()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     os.makedirs(STATIC_DIR, exist_ok=True)
@@ -457,6 +838,59 @@ def camera_capture():
     except Exception as exc:
         return JSONResponse({"ok": False, "detail": str(exc)}, status_code=503)
     return JSONResponse({"ok": True, **payload})
+
+
+@app.post("/pose-calibration/analyze")
+def pose_calibration_analyze(payload: dict = Body(...)):
+    try:
+        result = _analyze_checkerboard_pose(payload)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=400)
+    status = 200 if result.get("ok") else 422
+    return JSONResponse(result, status_code=status)
+
+
+@app.post("/pose-calibration/capture-analyze")
+def pose_calibration_capture_analyze(payload: dict = Body(default={})):
+    try:
+        try:
+            capture = _capture_oakd_calibration_frame()
+        except Exception as oak_exc:
+            fallback = _capture_camera_frame()
+            frame = _decode_image_base64(fallback["imageBase64"])
+            capture = {
+                "frame": frame,
+                "depthFrame": None,
+                "imageBase64": fallback["imageBase64"],
+                "intrinsics": None,
+                "meta": {
+                    "device": "OAK-D RGB fallback",
+                    "rgbWidth": fallback.get("width"),
+                    "rgbHeight": fallback.get("height"),
+                    "stereoDepth": False,
+                    "intrinsicsFromDevice": False,
+                    "fallbackReason": str(oak_exc),
+                    "capturedAt": fallback.get("capturedAt"),
+                },
+            }
+        analyze_payload = dict(payload or {})
+        intrinsics = capture.get("intrinsics")
+        if intrinsics:
+            analyze_payload.setdefault("fx", intrinsics[0][0])
+            analyze_payload.setdefault("fy", intrinsics[1][1])
+            analyze_payload.setdefault("cx", intrinsics[0][2])
+            analyze_payload.setdefault("cy", intrinsics[1][2])
+        result = _analyze_checkerboard_pose(
+            analyze_payload,
+            frame_override=capture["frame"],
+            depth_frame=capture.get("depthFrame"),
+            capture_meta=capture.get("meta"),
+        )
+        result["capturedImageBase64"] = capture["imageBase64"]
+        status = 200 if result.get("ok") else 422
+        return JSONResponse(result, status_code=status)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=503)
 
 
 @app.post("/qa/answer")

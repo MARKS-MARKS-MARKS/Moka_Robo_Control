@@ -277,6 +277,70 @@
             object-fit: contain;
         }
 
+        .calibration-stage {
+            position: relative;
+            min-height: 420px;
+            aspect-ratio: 16 / 10;
+            overflow: hidden;
+            border: 1px solid rgba(34, 211, 238, 0.28);
+            border-radius: 8px;
+            background:
+                linear-gradient(135deg, rgba(4, 11, 17, 0.96), rgba(8, 24, 31, 0.9)),
+                radial-gradient(circle at 50% 45%, rgba(56, 211, 255, 0.18), transparent 38%);
+            box-shadow: inset 0 0 58px rgba(34, 211, 238, 0.13);
+        }
+
+        .calibration-stage img,
+        .calibration-stage canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .calibration-stage canvas {
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .calibration-scan {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(transparent 0%, rgba(56, 211, 255, 0.08) 48%, rgba(244, 213, 141, 0.2) 50%, rgba(56, 211, 255, 0.08) 52%, transparent 100%),
+                repeating-linear-gradient(0deg, rgba(248, 250, 252, 0.04) 0 1px, transparent 1px 8px);
+            animation: calibration-scan 2.8s linear infinite;
+        }
+
+        .calibration-hud {
+            position: absolute;
+            left: 14px;
+            right: 14px;
+            bottom: 14px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .calibration-chip {
+            border: 1px solid rgba(34, 211, 238, 0.24);
+            border-radius: 8px;
+            background: rgba(2, 6, 10, 0.72);
+            padding: 8px 10px;
+            color: #cffafe;
+            font-family: Consolas, "SFMono-Regular", monospace;
+            font-size: 12px;
+        }
+
+        @keyframes calibration-scan {
+            0% { transform: translateY(-100%); opacity: 0.3; }
+            35% { opacity: 1; }
+            100% { transform: translateY(100%); opacity: 0.35; }
+        }
+
         .ttt-board {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -374,6 +438,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                     <div id="status-tag" class="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-bold tracking-[0.2em] text-red-200">未连接</div>
+                    <a href="./control.html?task=calibration#calibration" class="rounded-full border border-cyan-400/10 bg-cyan-400/10 px-5 py-2 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">位姿标定</a>
                     <a id="return-link" href="./index.html" class="rounded-full border border-amber-300/30 bg-amber-300/10 px-5 py-2 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">返回主菜单</a>
                     <button onclick="connectRobot()" class="rounded-full bg-cyan-400 px-5 py-2 text-sm font-black text-slate-950 transition hover:bg-cyan-300">连接设备</button>
                 </div>
@@ -407,6 +472,51 @@
                 </div>
                 <div id="qa-result" class="mt-3 rounded-2xl border border-purple-300/30 bg-slate-950/65 p-4 text-xs text-slate-300">智能答题：尚未识别</div>
             </div>
+
+                <div id="calibration" class="panel mt-5 rounded-[24px] p-5">
+                    <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 class="text-sm font-black tracking-[0.22em] text-cyan-200">OAK-D 末端位姿标定</h2>
+                            <p class="mt-2 text-xs leading-6 text-slate-300">RGB 棋盘角点 + 双目深度 ROI + 机器人正解 TCP 位置，输出闭环末端 RPY。</p>
+                        </div>
+                        <span id="calibration-tag" class="rounded-full border border-cyan-400/10 bg-slate-950/65 px-4 py-2 text-xs font-bold text-slate-300">待采集</span>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角列</span><input id="calib-cols" type="number" class="coord-input" value="9" min="3" max="20" step="1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角行</span><input id="calib-rows" type="number" class="coord-input" value="13" min="3" max="24" step="1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">格距mm</span><input id="calib-square" type="number" class="coord-input" value="30" min="5" max="80" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="calib-paper-z" type="number" class="coord-input" value="550" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">相机俯角</span><input id="calib-tilt" type="number" class="coord-input" value="15" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">设备</span><span class="coord-input text-right">OAK-D</span></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="startCalibrationCamera()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">开启画面</button>
+                            <button onclick="stopCalibrationCamera()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">停止画面</button>
+                            <button onclick="analyzeCalibrationFromPreview()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">拍照分析</button>
+                            <button onclick="captureOakdCalibration()" class="rounded-2xl bg-cyan-400 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300">OAK-D 深度标定</button>
+                            <button onclick="applyCalibrationRpyToTcp()" class="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/20">回填 RPY</button>
+                            <button onclick="sendCalibratedTcpMove()" class="rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">执行闭环位姿</button>
+                        </div>
+                    </div>
+                    <div class="calibration-stage mt-4">
+                        <img id="calibration-view" alt="OAK-D calibration view">
+                        <canvas id="calibration-overlay"></canvas>
+                        <div class="calibration-scan"></div>
+                        <div id="calibration-placeholder" class="absolute inset-0 flex items-center justify-center text-sm font-bold tracking-[0.2em] text-slate-400">等待 OAK-D 画面</div>
+                        <div class="calibration-hud">
+                            <div class="calibration-chip">CORNERS <span id="calib-hud-corners">--</span></div>
+                            <div class="calibration-chip">REPROJ <span id="calib-hud-error">--</span></div>
+                            <div class="calibration-chip">DEPTH <span id="calib-hud-depth">--</span></div>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div class="param-card text-left"><div class="text-[11px] text-slate-400">闭环 RX / RY / RZ</div><div id="calib-rpy" class="tcp-value text-base">-- / -- / --</div></div>
+                        <div class="param-card text-left"><div class="text-[11px] text-slate-400">闭环 XYZ</div><div id="calib-xyz" class="tcp-value text-base">-- / -- / 550.0</div></div>
+                        <div class="param-card text-left"><div class="text-[11px] text-slate-400">算法状态</div><div id="calib-quality" class="param-value text-base">未运行</div></div>
+                    </div>
+                    <div id="calibration-result" class="mt-3 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300">标定结果：--</div>
+                </div>
 
                 <div class="panel mt-5 rounded-[24px] p-5">
                     <div class="mb-4 flex items-center justify-between">
@@ -457,7 +567,7 @@
                     <div id="qa-flow-result" class="mt-4 rounded-2xl border border-purple-300/30 bg-slate-950/65 p-4 text-xs text-slate-300">题目：--　原始答案：--　清洗答案：--</div>
                 </div>
 
-                <div class="panel mt-5 rounded-[24px] p-5">
+                <div id="robot-status" class="panel mt-5 rounded-[24px] p-5">
                     <div class="mb-4 flex items-center justify-between">
                         <h2 class="text-sm font-black tracking-[0.22em] text-cyan-200">实时状态</h2>
                         <div class="text-xs text-slate-400">状态刷新周期 50ms</div>
@@ -509,7 +619,7 @@
                     <button onclick="sendJointMove()" class="mt-4 w-full rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">移动关节</button>
                 </div>
 
-                <div class="panel rounded-[24px] p-5">
+                <div id="tcp-control" class="panel rounded-[24px] p-5">
                     <h2 class="mb-4 text-sm font-black tracking-[0.22em] text-amber-200">TCP 空间控制</h2>
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div class="input-row"><span class="w-16 text-xs text-slate-400">X</span><input id="in-x" type="number" class="coord-input" value="450" step="0.1"></div>
@@ -651,6 +761,7 @@
         let teachPoints = [];
         let latestCapturedImageBase64 = "";
         let latestQaAnswer = null;
+        let latestCalibrationResult = null;
         let latestStatus = {
             joints: [0, 0, 0, 0, 0, 0],
             tcp: [0, 0, 0, 0, 0, 0],
@@ -1624,6 +1735,219 @@
             setCameraTag("已停止");
         };
 
+        const setCalibrationTag = (text, ok = null) => {
+            const tag = document.getElementById("calibration-tag");
+            if (!tag) return;
+            tag.textContent = text;
+            if (ok === true) {
+                tag.className = "rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-2 text-xs font-bold text-emerald-200";
+            } else if (ok === false) {
+                tag.className = "rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-200";
+            } else {
+                tag.className = "rounded-full border border-cyan-400/10 bg-slate-950/65 px-4 py-2 text-xs font-bold text-slate-300";
+            }
+        };
+
+        const calibrationPayload = () => ({
+            innerCols: Math.max(3, Math.round(numberValue("calib-cols", 9))),
+            innerRows: Math.max(3, Math.round(numberValue("calib-rows", 13))),
+            squareSizeMm: Math.max(1, numberValue("calib-square", 30)),
+            paperZMm: numberValue("calib-paper-z", 550),
+            cameraTiltDeg: numberValue("calib-tilt", 15),
+        });
+
+        const setCalibrationImage = (base64) => {
+            const img = document.getElementById("calibration-view");
+            const placeholder = document.getElementById("calibration-placeholder");
+            if (!img || !placeholder || !base64) return;
+            img.src = `data:image/jpeg;base64,${base64}`;
+            placeholder.classList.add("hidden");
+        };
+
+        const sourceToCanvasMapper = (canvas, sourceWidth, sourceHeight) => {
+            const rect = canvas.getBoundingClientRect();
+            const scale = Math.min(rect.width / sourceWidth, rect.height / sourceHeight);
+            const drawWidth = sourceWidth * scale;
+            const drawHeight = sourceHeight * scale;
+            const offsetX = (rect.width - drawWidth) / 2;
+            const offsetY = (rect.height - drawHeight) / 2;
+            return ([x, y]) => [offsetX + x * scale, offsetY + y * scale];
+        };
+
+        const drawCalibrationOverlay = (data) => {
+            const canvas = document.getElementById("calibration-overlay");
+            if (!canvas || !data?.width || !data?.height) return;
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.max(1, Math.round(rect.width * dpr));
+            canvas.height = Math.max(1, Math.round(rect.height * dpr));
+            const ctx = canvas.getContext("2d");
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, rect.width, rect.height);
+            const map = sourceToCanvasMapper(canvas, data.width, data.height);
+            const features = data.features || {};
+
+            ctx.save();
+            ctx.shadowBlur = 16;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            (features.lines || []).forEach((line, index) => {
+                const [ax, ay] = map(line.a);
+                const [bx, by] = map(line.b);
+                ctx.strokeStyle = index % 2 ? "rgba(52, 211, 153, 0.42)" : "rgba(34, 211, 238, 0.42)";
+                ctx.shadowColor = index % 2 ? "rgba(52, 211, 153, 0.75)" : "rgba(34, 211, 238, 0.75)";
+                ctx.lineWidth = 1.1;
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+            });
+
+            (features.corners || []).forEach((point, index) => {
+                const [x, y] = map(point);
+                ctx.fillStyle = index % 7 === 0 ? "rgba(244, 213, 141, 0.96)" : "rgba(34, 211, 238, 0.9)";
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                ctx.arc(x, y, index % 7 === 0 ? 4.5 : 2.8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            (features.axes || []).forEach((axis) => {
+                const [ax, ay] = map(axis.a);
+                const [bx, by] = map(axis.b);
+                const color = axis.axis === "X" ? "#ff5b61" : axis.axis === "Y" ? "#6ee7b7" : "#38d3ff";
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(bx, by);
+                ctx.stroke();
+                ctx.font = "800 16px Consolas";
+                ctx.fillText(axis.axis, bx + 6, by - 6);
+            });
+            ctx.restore();
+        };
+
+        const renderCalibrationResult = (data) => {
+            latestCalibrationResult = data;
+            if (data.overlayImageBase64) setCalibrationImage(data.overlayImageBase64);
+            drawCalibrationOverlay(data);
+
+            const quality = data.quality || {};
+            const pose = data.pose || {};
+            const closedLoop = pose.closedLoopPose || null;
+            document.getElementById("calib-hud-corners").textContent = quality.cornerCount ?? "--";
+            document.getElementById("calib-hud-error").textContent = Number.isFinite(quality.meanReprojectionErrorPx)
+                ? `${quality.meanReprojectionErrorPx.toFixed(2)}px`
+                : "--";
+            document.getElementById("calib-hud-depth").textContent = Number.isFinite(quality.oakDepthMedianMm)
+                ? `${quality.oakDepthMedianMm.toFixed(0)}mm`
+                : "固定Z";
+
+            if (closedLoop) {
+                document.getElementById("calib-rpy").textContent = closedLoop.slice(3, 6).map((v) => Number(v).toFixed(4)).join(" / ");
+                document.getElementById("calib-xyz").textContent = closedLoop.slice(0, 3).map((v, i) => Number(v).toFixed(i < 2 ? 2 : 1)).join(" / ");
+            }
+            document.getElementById("calib-quality").textContent = data.ok ? "棋盘锁定" : "未锁定";
+            document.getElementById("calibration-result").textContent = data.ok && closedLoop
+                ? `标定结果：闭环位姿 X=${closedLoop[0].toFixed(2)} Y=${closedLoop[1].toFixed(2)} Z=${closedLoop[2].toFixed(1)} RX=${closedLoop[3].toFixed(5)} RY=${closedLoop[4].toFixed(5)} RZ=${closedLoop[5].toFixed(5)}；检测器=${quality.detector}；内参=${quality.cameraMatrixEstimated ? "估算" : "OAK-D EEPROM"}；深度=${quality.oakDepthMedianMm ? `${quality.oakDepthMedianMm.toFixed(0)}mm/${quality.oakDepthSamples}点` : "未使用"}`
+                : `标定结果：${data.detail || "未识别到完整棋盘"}`;
+            setCalibrationTag(data.ok ? "已锁定" : "未锁定", Boolean(data.ok));
+        };
+
+        window.startCalibrationCamera = async () => {
+            await checkCamera();
+            const img = document.getElementById("calibration-view");
+            const placeholder = document.getElementById("calibration-placeholder");
+            if (!img || !placeholder) return;
+            img.src = `/camera/stream?t=${Date.now()}`;
+            placeholder.classList.add("hidden");
+            setCalibrationTag("OAK-D 预览中");
+        };
+
+        window.stopCalibrationCamera = () => {
+            const img = document.getElementById("calibration-view");
+            const placeholder = document.getElementById("calibration-placeholder");
+            const canvas = document.getElementById("calibration-overlay");
+            if (img) img.removeAttribute("src");
+            if (placeholder) placeholder.classList.remove("hidden");
+            if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+            setCalibrationTag("已停止");
+        };
+
+        window.analyzeCalibrationFromPreview = async () => {
+            try {
+                window.stopCalibrationCamera();
+                await sleep(320);
+                setCalibrationTag("拍照分析中");
+                const captureResp = await fetch("/camera/capture", { cache: "no-store" });
+                const capture = await captureResp.json();
+                if (!captureResp.ok || !capture.ok) throw new Error(capture.detail || "相机拍照失败");
+                setCalibrationImage(capture.imageBase64);
+
+                const resp = await fetch("/pose-calibration/analyze", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ...calibrationPayload(), imageBase64: capture.imageBase64 }),
+                });
+                const data = await resp.json();
+                renderCalibrationResult(data);
+                showToast(data.ok ? "棋盘姿态已解算" : data.detail, data.ok ? "success" : "error");
+            } catch (error) {
+                setCalibrationTag("分析失败", false);
+                showToast(error.message || "位姿标定失败", "error");
+            }
+        };
+
+        window.captureOakdCalibration = async () => {
+            try {
+                window.stopCalibrationCamera();
+                await sleep(320);
+                setCalibrationTag("OAK-D 深度采集中");
+                const resp = await fetch("/pose-calibration/capture-analyze", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(calibrationPayload()),
+                });
+                const data = await resp.json();
+                if (data.capturedImageBase64 && !data.overlayImageBase64) setCalibrationImage(data.capturedImageBase64);
+                renderCalibrationResult(data);
+                showToast(data.ok ? "OAK-D 位姿与深度已融合" : data.detail, data.ok ? "success" : "error");
+            } catch (error) {
+                setCalibrationTag("采集失败", false);
+                showToast(error.message || "OAK-D 标定采集失败", "error");
+            }
+        };
+
+        window.applyCalibrationRpyToTcp = () => {
+            const pose = latestCalibrationResult?.pose?.closedLoopPose;
+            if (!pose) {
+                showToast("还没有可回填的标定位姿", "error");
+                return;
+            }
+            ["x", "y", "z", "rx", "ry", "rz"].forEach((key, index) => {
+                const node = document.getElementById(`in-${key}`);
+                if (node) node.value = Number(pose[index]).toFixed(index < 3 ? 2 : 5);
+            });
+            persistFormState();
+            showToast("已回填闭环 TCP 位姿", "success");
+        };
+
+        window.sendCalibratedTcpMove = () => {
+            const pose = latestCalibrationResult?.pose?.closedLoopPose;
+            if (!pose) {
+                showToast("请先完成位姿标定", "error");
+                return;
+            }
+            if (!ensureConnected()) return;
+            if (!confirm("将按标定闭环 RPY 执行 MOVEL，请确认末端和棋盘周围安全。")) return;
+            ws.send(JSON.stringify({ type: "movel_cart", target: pose }));
+            syncStatusTcpPose(pose);
+            showToast("闭环位姿指令已发送", "success");
+        };
+
         window.syncWritingCenter = () => {
             const tcp = latestStatus.tcp;
             if (!Array.isArray(tcp) || tcp.length !== 6) {
@@ -2321,6 +2645,13 @@
                 subtitle: "读取已保存的倒茶示教链，并串联再现倒茶动作。",
                 targetId: "tea",
             },
+            calibration: {
+                title: "位姿标定",
+                subtitle: "使用 OAK-D 双目深度相机识别棋盘格，闭环计算末端 RPY 姿态。",
+                targetId: "calibration",
+                keepPanelIds: ["robot-status", "teach", "tcp-control"],
+                keepColumns: true,
+            },
         };
 
         const taskModeUrl = (task) => `./control.html?task=${encodeURIComponent(task)}#${taskModeConfig[task].focusId || taskModeConfig[task].targetId}`;
@@ -2345,8 +2676,9 @@
             const target = document.getElementById(config.targetId);
             if (!target) return;
 
+            const keepIds = new Set([config.targetId, ...(config.keepPanelIds || [])]);
             document.querySelectorAll("main .panel").forEach((panel) => {
-                if (panel === target) return;
+                if (panel === target || keepIds.has(panel.id)) return;
                 if (panel.closest("#toast-container")) return;
                 panel.classList.add("hidden");
             });
@@ -2357,13 +2689,15 @@
 
             const main = document.querySelector("main");
             const targetColumn = target.closest("section, aside");
-            if (main && targetColumn) {
+            if (main && targetColumn && !config.keepColumns) {
                 Array.from(main.children).forEach((child) => {
                     if (child !== targetColumn) child.classList.add("hidden");
                 });
                 targetColumn.className = "col-span-12 space-y-5";
                 target.classList.add("mx-auto", "w-full");
                 target.style.maxWidth = "920px";
+            } else if (config.keepColumns) {
+                target.classList.add("w-full");
             }
 
             const taskHeader = document.createElement("div");
