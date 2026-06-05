@@ -8,4 +8,11 @@ __pycache__/
 
 # Local runtime files
 nohup.out
+teach_path.txt
+app/.cache/
 
+# Local backups and duplicate working copies
+*.bak_codex
+.git.empty_backup/
+moka wangye/
+moka_wangye_j/
