@@ -16,3 +16,20 @@ python3 app.py
 
 https://github.com/MARKS-MARKS-MARKS/Moka_Robo_Control
 
+cd /tmp/Moka_Robo_Control_upload
+
+git pull origin main
+
+rsync -av --delete \
+  --exclude='.git' \
+  --exclude='test.out' \
+  --exclude='*.bak_codex' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  /home/seuauto/moka/ \
+  /tmp/Moka_Robo_Control_upload/
+
+git status
+git add .
+git commit -m "Add GLM-5V smart QA panel"
+git push origin main
