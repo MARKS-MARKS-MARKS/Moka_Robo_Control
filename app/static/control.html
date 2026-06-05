@@ -485,9 +485,9 @@
                         <div class="grid grid-cols-2 gap-2">
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">内角列</span><input id="calib-cols" type="number" class="coord-input" value="9" min="3" max="20" step="1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">内角行</span><input id="calib-rows" type="number" class="coord-input" value="13" min="3" max="24" step="1"></div>
-                            <div class="input-row"><span class="w-16 text-xs text-slate-400">格距mm</span><input id="calib-square" type="number" class="coord-input" value="30" min="5" max="80" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">格距mm</span><input id="calib-square" type="number" class="coord-input" value="25" min="5" max="80" step="0.1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="calib-paper-z" type="number" class="coord-input" value="550" step="0.1"></div>
-                            <div class="input-row"><span class="w-16 text-xs text-slate-400">相机俯角</span><input id="calib-tilt" type="number" class="coord-input" value="15" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">相机俯角</span><input id="calib-tilt" type="number" class="coord-input" value="0" step="0.1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">设备</span><span class="coord-input text-right">OAK-D</span></div>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
@@ -1751,9 +1751,9 @@
         const calibrationPayload = () => ({
             innerCols: Math.max(3, Math.round(numberValue("calib-cols", 9))),
             innerRows: Math.max(3, Math.round(numberValue("calib-rows", 13))),
-            squareSizeMm: Math.max(1, numberValue("calib-square", 30)),
+            squareSizeMm: Math.max(1, numberValue("calib-square", 25)),
             paperZMm: numberValue("calib-paper-z", 550),
-            cameraTiltDeg: numberValue("calib-tilt", 15),
+            cameraTiltDeg: numberValue("calib-tilt", 0),
         });
 
         const setCalibrationImage = (base64) => {

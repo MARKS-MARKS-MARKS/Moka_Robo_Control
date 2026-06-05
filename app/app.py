@@ -150,9 +150,9 @@ def _analyze_checkerboard_pose(payload: dict, frame_override=None, depth_frame=N
     height, width = frame.shape[:2]
     inner_cols = int(payload.get("innerCols", 9) or 9)
     inner_rows = int(payload.get("innerRows", 13) or 13)
-    square_size = float(payload.get("squareSizeMm", 30.0) or 30.0)
+    square_size = float(payload.get("squareSizeMm", 25.0) or 25.0)
     paper_z = float(payload.get("paperZMm", 550.0) or 550.0)
-    camera_tilt_deg = float(payload.get("cameraTiltDeg", 15.0) or 15.0)
+    camera_tilt_deg = float(payload.get("cameraTiltDeg", 0.0) or 0.0)
 
     if inner_cols < 3 or inner_rows < 3:
         raise RuntimeError("棋盘内角点行列数至少为 3")
