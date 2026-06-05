@@ -28,11 +28,18 @@ QA_VISION_MODEL = os.environ.get("QA_VISION_MODEL") or os.environ.get("OPENAI_MO
 ZHIPU_BASE_URL = (os.environ.get("ZHIPU_BASE_URL") or "https://api.z.ai/api/paas/v4").rstrip("/")
 ZHIPU_MODEL = os.environ.get("ZHIPU_MODEL") or "glm-5v-turbo"
 ENV_HANZI_DATA_DIR = os.environ.get("HANZI_DATA_DIR")
+ENV_DRAWING_DATA_DIR = os.environ.get("DRAWING_DATA_DIR")
 HANZI_DATA_DIRS = [
     Path(ENV_HANZI_DATA_DIR).expanduser() if ENV_HANZI_DATA_DIR else None,
     PROJECT_ROOT / "data",
     PROJECT_ROOT / "moka wangye" / "data",
     APP_DIR / "static" / "hanzi-data",
+]
+DRAWING_DATA_DIRS = [
+    Path(ENV_DRAWING_DATA_DIR).expanduser() if ENV_DRAWING_DATA_DIR else None,
+    PROJECT_ROOT / "drawings",
+    PROJECT_ROOT / "moka wangye" / "drawings",
+    APP_DIR / "static" / "drawings",
 ]
 
 try:
@@ -542,6 +549,46 @@ def hanzi_data(char: str):
             "ok": False,
             "detail": f"未找到汉字字库数据: {char}",
             "char": char,
+            "checkedDirs": checked_dirs,
+        },
+        status_code=404,
+    )
+
+
+@app.get("/drawing/{name}")
+def drawing_data(name: str):
+    safe_name = re.sub(r"[^0-9A-Za-z_\-\u4e00-\u9fff]", "", str(name or "").strip())
+    if not safe_name:
+        return JSONResponse({"ok": False, "detail": "图案名称不能为空", "name": name}, status_code=400)
+
+    checked_dirs = []
+    for data_dir in DRAWING_DATA_DIRS:
+        if data_dir is None:
+            continue
+        checked_dirs.append(str(data_dir))
+        file_path = data_dir / f"{safe_name}.json"
+        if not file_path.is_file():
+            continue
+        try:
+            with file_path.open("r", encoding="utf-8") as fp:
+                data = json.load(fp)
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "detail": f"图案文件读取失败: {exc}", "name": safe_name},
+                status_code=500,
+            )
+        if not isinstance(data.get("medians"), list) or not data["medians"]:
+            return JSONResponse(
+                {"ok": False, "detail": "图案文件缺少有效 medians", "name": safe_name},
+                status_code=422,
+            )
+        return JSONResponse({"ok": True, "name": safe_name, "data": data})
+
+    return JSONResponse(
+        {
+            "ok": False,
+            "detail": f"未找到图案数据: {safe_name}",
+            "name": safe_name,
             "checkedDirs": checked_dirs,
         },
         status_code=404,
