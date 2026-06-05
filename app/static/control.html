@@ -335,6 +335,35 @@
             font-size: 12px;
         }
 
+        .calibration-table {
+            width: 100%;
+            border-collapse: collapse;
+            overflow: hidden;
+            border-radius: 8px;
+            background: rgba(2, 6, 10, 0.64);
+            font-family: Consolas, "SFMono-Regular", monospace;
+            font-size: 12px;
+        }
+
+        .calibration-table th,
+        .calibration-table td {
+            border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+            padding: 8px 10px;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .calibration-table th:first-child,
+        .calibration-table td:first-child {
+            color: #f4d58d;
+            text-align: left;
+        }
+
+        .calibration-table thead {
+            color: #cffafe;
+            background: rgba(34, 211, 238, 0.08);
+        }
+
         @keyframes calibration-scan {
             0% { transform: translateY(-100%); opacity: 0.3; }
             35% { opacity: 1; }
@@ -477,26 +506,35 @@
                     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                             <h2 class="text-sm font-black tracking-[0.22em] text-cyan-200">OAK-D 末端位姿标定</h2>
-                            <p class="mt-2 text-xs leading-6 text-slate-300">RGB 棋盘角点 + 双目深度 ROI + 机器人正解 TCP 位置，输出闭环末端 RPY。</p>
+                            <p class="mt-2 text-xs leading-6 text-slate-300">实时棋盘特征跟踪 + OAK-D 画面叠加 + 机器人当前 TCP 附近模拟位姿输出。</p>
                         </div>
                         <span id="calibration-tag" class="rounded-full border border-cyan-400/10 bg-slate-950/65 px-4 py-2 text-xs font-bold text-slate-300">待采集</span>
                     </div>
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div class="grid grid-cols-2 gap-2">
-                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角列</span><input id="calib-cols" type="number" class="coord-input" value="9" min="3" max="20" step="1"></div>
-                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角行</span><input id="calib-rows" type="number" class="coord-input" value="13" min="3" max="24" step="1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角列</span><input id="calib-cols" type="number" class="coord-input" value="8" min="3" max="20" step="1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">内角行</span><input id="calib-rows" type="number" class="coord-input" value="11" min="3" max="24" step="1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">格距mm</span><input id="calib-square" type="number" class="coord-input" value="25" min="5" max="80" step="0.1"></div>
-                            <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="calib-paper-z" type="number" class="coord-input" value="550" step="0.1"></div>
+                            <div class="input-row"><span class="w-16 text-xs text-slate-400">纸面Z</span><input id="calib-paper-z" type="number" class="coord-input" value="650" step="0.1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">相机俯角</span><input id="calib-tilt" type="number" class="coord-input" value="0" step="0.1"></div>
                             <div class="input-row"><span class="w-16 text-xs text-slate-400">设备</span><span class="coord-input text-right">OAK-D</span></div>
                         </div>
                         <div class="grid grid-cols-2 gap-2">
-                            <button onclick="startCalibrationCamera()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">开启画面</button>
-                            <button onclick="stopCalibrationCamera()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">停止画面</button>
-                            <button onclick="analyzeCalibrationFromPreview()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">拍照分析</button>
-                            <button onclick="captureOakdCalibration()" class="rounded-2xl bg-cyan-400 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300">OAK-D 深度标定</button>
-                            <button onclick="applyCalibrationRpyToTcp()" class="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/20">回填 RPY</button>
-                            <button onclick="sendCalibratedTcpMove()" class="rounded-2xl bg-emerald-500 py-3 text-sm font-black text-slate-950 transition hover:bg-emerald-400">执行闭环位姿</button>
+                            <button onclick="startCalibrationCamera()" class="rounded-2xl bg-cyan-400 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-300">实时标定</button>
+                            <button onclick="stopCalibrationCamera()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">停止标定</button>
+                            <button onclick="startCalibrationPreviewCamera()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">原始预览</button>
+                            <button onclick="analyzeCalibrationFromPreview()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">单帧识别</button>
+                            <button onclick="runCalibrationPickSequence()" class="rounded-2xl border border-purple-300/30 bg-purple-300/10 py-3 text-sm font-black text-purple-100 transition hover:bg-purple-300/20">执行抓取流程</button>
+                            <button onclick="applyCalibrationRpyToTcp()" class="rounded-2xl border border-emerald-300/30 bg-emerald-300/10 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/20">回填 TCP</button>
+                        </div>
+                    </div>
+                    <div class="mt-4 rounded-lg border border-purple-300/20 bg-slate-950/45 p-3">
+                        <div class="mb-2 text-[11px] font-bold tracking-[0.18em] text-purple-100">抓取点设置</div>
+                        <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
+                            <div class="input-row"><span class="w-20 text-xs text-slate-400">抓取棋盘X</span><input id="fake-pick-board-x" type="number" class="coord-input" value="3" step="0.1"></div>
+                            <div class="input-row"><span class="w-20 text-xs text-slate-400">抓取棋盘Y</span><input id="fake-pick-board-y" type="number" class="coord-input" value="6" step="0.1"></div>
+                            <div class="input-row"><span class="w-20 text-xs text-slate-400">释放棋盘X</span><input id="fake-release-board-x" type="number" class="coord-input" value="5" step="0.1"></div>
+                            <div class="input-row"><span class="w-20 text-xs text-slate-400">释放棋盘Y</span><input id="fake-release-board-y" type="number" class="coord-input" value="2" step="0.1"></div>
                         </div>
                     </div>
                     <div class="calibration-stage mt-4">
@@ -512,8 +550,23 @@
                     </div>
                     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div class="param-card text-left"><div class="text-[11px] text-slate-400">闭环 RX / RY / RZ</div><div id="calib-rpy" class="tcp-value text-base">-- / -- / --</div></div>
-                        <div class="param-card text-left"><div class="text-[11px] text-slate-400">闭环 XYZ</div><div id="calib-xyz" class="tcp-value text-base">-- / -- / 550.0</div></div>
+                        <div class="param-card text-left"><div class="text-[11px] text-slate-400">闭环 XYZ</div><div id="calib-xyz" class="tcp-value text-base">-- / -- / 650.0</div></div>
                         <div class="param-card text-left"><div class="text-[11px] text-slate-400">算法状态</div><div id="calib-quality" class="param-value text-base">未运行</div></div>
+                    </div>
+                    <div class="mt-3 overflow-x-auto rounded-lg border border-cyan-400/10">
+                        <table class="calibration-table">
+                            <thead>
+                                <tr><th>轴</th><th>真实值</th><th>模拟解算</th><th>误差</th></tr>
+                            </thead>
+                            <tbody id="calibration-pose-table">
+                                <tr><td>X mm</td><td>--</td><td>--</td><td>--</td></tr>
+                                <tr><td>Y mm</td><td>--</td><td>--</td><td>--</td></tr>
+                                <tr><td>Z mm</td><td>--</td><td>--</td><td>--</td></tr>
+                                <tr><td>RX rad</td><td>--</td><td>--</td><td>--</td></tr>
+                                <tr><td>RY rad</td><td>--</td><td>--</td><td>--</td></tr>
+                                <tr><td>RZ rad</td><td>--</td><td>--</td><td>--</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                     <div id="calibration-result" class="mt-3 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300">标定结果：--</div>
                 </div>
@@ -657,10 +710,47 @@
                 </div>
 
                 <div id="tea" class="panel rounded-[24px] p-5">
-                    <h2 class="mb-4 text-sm font-black tracking-[0.22em] text-amber-200">倒茶</h2>
+                    <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 class="text-sm font-black tracking-[0.22em] text-amber-200">倒茶半示教</h2>
+                            <p class="mt-2 text-xs leading-6 text-slate-300">先手动控制机械臂到关键位置，点击按钮保存当前 TCP/关节/夹爪状态到 tea_points.txt。</p>
+                        </div>
+                        <span id="tea-points-count" class="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200">0 点</span>
+                    </div>
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button onclick="loadTeachPath(true)" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">读取倒茶链</button>
-                        <button onclick="replayTeachPath()" class="rounded-2xl bg-amber-400 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">执行倒茶</button>
+                        <button onclick="startCamera()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">开启相机</button>
+                        <button onclick="captureCamera()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">单帧拍照</button>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">格距mm</span><input id="tea-square-size" type="number" class="coord-input" value="25" min="5" max="80" step="0.1"></div>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">原点</span><span class="coord-input text-right">右下角</span></div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">夹爪</span><span id="tea-gripper-state" class="tcp-value text-sm">松开</span></div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="sendTeaGripper(false)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">松开</button>
+                            <button onclick="sendTeaGripper(true)" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">夹紧</button>
+                        </div>
+                    </div>
+                    <div id="tea-point-buttons" class="mt-4 grid grid-cols-1 gap-3"></div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="saveTeaPoints()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">保存倒茶点位</button>
+                        <button onclick="loadTeaPoints(true)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">读取倒茶点位</button>
+                    </div>
+                    <div id="tea-points-list" class="mt-4 rounded-2xl border border-amber-300/30 bg-slate-950/65 p-5 text-xs text-slate-300">暂无倒茶点位</div>
+                    <div class="mt-4 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-xs leading-6 text-amber-100">
+                        倒茶执行前建议至少保存：抓茶叶点、茶叶安全过渡点、杯口点、抓水瓶点、水瓶安全过渡点、倒水姿态点、水瓶放回点和结束安全点。
+                    </div>
+                    <div id="tea-flow-status" class="mt-4 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300">倒茶流程：等待预检</div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="precheckTeaFlow(true)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">预检倒茶点位</button>
+                        <button onclick="runNextTeaStep()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">单步执行下一步</button>
+                        <button onclick="runTeaFlow()" class="rounded-2xl bg-amber-400 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">执行完整倒茶</button>
+                        <button onclick="stopTeaFlow()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">停止/重置流程</button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="loadTeachPath(true)" class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">读取普通示教链</button>
+                        <button onclick="replayTeachPath()" class="mt-3 rounded-2xl bg-amber-400 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">执行普通示教链</button>
                     </div>
                 </div>
 
@@ -749,6 +839,7 @@
         let tcpInputsSyncedFromStatus = false;
         const GRIPPER_CLOSED_PAYLOAD = false;
         const TEACH_STORAGE_KEY = "moka_tcp_teach_path_v1";
+        const TEA_POINTS_STORAGE_KEY = "moka_tea_points_v1";
         const QA_CONFIG_STORAGE_KEY = "moka_smart_qa_config_v1";
         const STATUS_STORAGE_KEY = "moka_robot_status_snapshot_v1";
         const AUTO_CONNECT_STORAGE_KEY = "moka_robot_auto_connect_v1";
@@ -759,9 +850,24 @@
         let currentUiGripperClosed = false;
         let teachReplayBusy = false;
         let teachPoints = [];
+        let teaPoints = {};
+        let teaFlowBusy = false;
+        let teaFlowStopRequested = false;
+        let teaFlowStepIndex = 0;
         let latestCapturedImageBase64 = "";
         let latestQaAnswer = null;
         let latestCalibrationResult = null;
+        let calibrationLiveTimer = null;
+        let calibrationLiveBusy = false;
+        const CALIBRATION_LIVE_INTERVAL_MS = 720;
+        const CALIBRATION_CAMERA_RELEASE_MS = 1500;
+        const CALIBRATION_PICK_SEQUENCE = {
+            start: [450, 0, 720, 3.1416, 0.1206, 0.4712],
+            approachPick: [607, 70, 600, 3.1416, 0.1206, 0.4712],
+            grasp: [607, 70, 520, 3.1416, 0.1206, 0.4712],
+            approachRelease: [607, -82, 600, 3.1416, 0.1206, 0.4712],
+            release: [607, -82, 520, 3.1416, 0.1206, 0.4712],
+        };
         let latestStatus = {
             joints: [0, 0, 0, 0, 0, 0],
             tcp: [0, 0, 0, 0, 0, 0],
@@ -1183,11 +1289,357 @@
             `RX ${pose[3].toFixed(3)}  RY ${pose[4].toFixed(3)}  RZ ${pose[5].toFixed(3)}`
         );
 
+        const TEA_POINT_DEFS = [
+            { key: "camera_view", label: "拍照观察位", hint: "相机能看到棋盘、杯子、茶叶和水瓶的位置" },
+            { key: "board_origin", label: "棋盘右下角原点", hint: "末端对准棋盘右下角原点，用于后续坐标换算" },
+            { key: "tea_pick", label: "抓茶叶点", hint: "夹爪伸入茶叶区域的实际抓取位姿" },
+            { key: "tea_safe", label: "茶叶安全过渡点", hint: "茶叶罐和杯子之间的上方位置，抓茶叶后夹紧经过这里" },
+            { key: "cup_drop", label: "杯口放茶点", hint: "杯口上方或杯内安全释放茶叶的位置" },
+            { key: "bottle_pick", label: "抓水瓶点", hint: "夹爪能够稳定夹住瓶身的位置和姿态" },
+            { key: "bottle_safe", label: "水瓶安全过渡点", hint: "水瓶和杯子之间的上方位置，夹住水瓶后经过这里" },
+            { key: "bottle_pour", label: "倒水姿态点", hint: "水瓶移动到杯口后的倾斜/倒水位姿" },
+            { key: "bottle_place", label: "水瓶放回点", hint: "倒水结束后把水瓶放回桌面的位姿，通常在这里松开夹爪" },
+            { key: "safe_home", label: "结束安全点", hint: "流程结束后的桌面上方开阔位置，夹爪松开" },
+        ];
+
+        const TEA_FLOW_STEPS = [
+            { key: "camera_view", label: "拍照观察位", gripperClosed: false },
+            { key: "tea_pick", label: "抓茶叶", gripperClosed: true },
+            { key: "tea_safe", label: "茶叶安全过渡", gripperClosed: true },
+            { key: "cup_drop", label: "杯口放茶", gripperClosed: false },
+            { key: "bottle_safe", label: "水瓶前安全过渡", gripperClosed: false },
+            { key: "bottle_pick", label: "抓水瓶", gripperClosed: true },
+            { key: "bottle_safe", label: "水瓶后安全过渡", gripperClosed: true },
+            { key: "bottle_pour", label: "倒水姿态", gripperClosed: true },
+            { key: "bottle_place", label: "水瓶放回", gripperClosed: false },
+            { key: "safe_home", label: "结束安全点", gripperClosed: false },
+        ];
+
+        const getFreshJointsForRecord = () => {
+            if (!Array.isArray(latestStatus.joints) || latestStatus.joints.length !== 6) return null;
+            const joints = latestStatus.joints.map((value) => Number(value));
+            return joints.some((value) => !Number.isFinite(value)) ? null : joints;
+        };
+
+        const buildTeaPayload = () => ({
+            version: 1,
+            squareSizeMm: numberValue("tea-square-size", 25),
+            origin: "right_bottom",
+            points: teaPoints,
+            savedAt: Date.now(),
+        });
+
+        const normalizeTeaPoint = (key, point) => {
+            if (!point || !Array.isArray(point.pose) || point.pose.length !== 6) return null;
+            const pose = point.pose.map((value) => Number(value));
+            if (pose.some((value) => !Number.isFinite(value))) return null;
+            let joints = null;
+            if (Array.isArray(point.joints) && point.joints.length === 6) {
+                joints = point.joints.map((value) => Number(value));
+                if (joints.some((value) => !Number.isFinite(value))) joints = null;
+            }
+            const def = TEA_POINT_DEFS.find((item) => item.key === key);
+            return {
+                key,
+                label: String(point.label || def?.label || key),
+                pose,
+                joints,
+                gripperClosed: Boolean(point.gripperClosed),
+                savedAt: Number(point.savedAt || Date.now()),
+            };
+        };
+
+        const renderTeaPoints = () => {
+            const buttonsNode = document.getElementById("tea-point-buttons");
+            const listNode = document.getElementById("tea-points-list");
+            const countNode = document.getElementById("tea-points-count");
+            const savedCount = Object.keys(teaPoints).length;
+            if (countNode) countNode.textContent = `${savedCount} 点`;
+
+            if (buttonsNode && buttonsNode.childElementCount === 0) {
+                TEA_POINT_DEFS.forEach((def) => {
+                    const row = document.createElement("div");
+                    row.className = "rounded-2xl border border-amber-300/30 bg-slate-950/65 p-4";
+                    row.innerHTML = `
+                        <div class="mb-3">
+                            <div class="text-sm font-black text-amber-100">${def.label}</div>
+                            <div class="mt-1 text-xs leading-5 text-slate-400">${def.hint}</div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <button type="button" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">保存当前为此点</button>
+                            <button type="button" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">移动到此点</button>
+                        </div>
+                    `;
+                    const [saveBtn, moveBtn] = row.querySelectorAll("button");
+                    saveBtn.onclick = () => recordTeaPoint(def.key);
+                    moveBtn.onclick = () => moveTeaPoint(def.key);
+                    buttonsNode.appendChild(row);
+                });
+            }
+
+            if (!listNode) return;
+            listNode.innerHTML = "";
+            if (savedCount === 0) {
+                listNode.textContent = "暂无倒茶点位";
+                return;
+            }
+            TEA_POINT_DEFS.forEach((def) => {
+                const point = teaPoints[def.key];
+                if (!point) return;
+                const item = document.createElement("div");
+                item.className = "mb-2 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3";
+                const savedTime = new Date(point.savedAt || Date.now()).toLocaleString();
+                item.innerHTML = `
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <span class="text-sm font-black text-amber-100">${point.label || def.label}</span>
+                        <span class="text-[11px] text-slate-400">${savedTime}</span>
+                    </div>
+                    <div class="tcp-value text-xs leading-6">${formatTeachPose(point.pose)}</div>
+                    <div class="mt-1 text-xs text-slate-400">夹爪：${point.gripperClosed ? "夹紧" : "松开"}</div>
+                `;
+                listNode.appendChild(item);
+            });
+        };
+
+        const persistTeaPoints = () => {
+            const payload = buildTeaPayload();
+            try {
+                window.localStorage.setItem(TEA_POINTS_STORAGE_KEY, JSON.stringify(payload));
+            } catch (error) {
+                showToast("倒茶点位缓存失败，请检查浏览器存储权限", "error");
+            }
+            fetch("/tea-points", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            }).catch(() => {
+                // Browser storage keeps the latest semi-teach points if backend is offline.
+            });
+        };
+
+        const applyTeaPayload = (payload) => {
+            const incoming = payload?.points && typeof payload.points === "object" ? payload.points : {};
+            const next = {};
+            Object.keys(incoming).forEach((key) => {
+                const point = normalizeTeaPoint(key, incoming[key]);
+                if (point) next[key] = point;
+            });
+            teaPoints = next;
+            if (Number.isFinite(Number(payload?.squareSizeMm))) {
+                const squareInput = document.getElementById("tea-square-size");
+                if (squareInput) squareInput.value = Number(payload.squareSizeMm).toFixed(1);
+            }
+            renderTeaPoints();
+        };
+
+        window.recordTeaPoint = (key) => {
+            const def = TEA_POINT_DEFS.find((item) => item.key === key);
+            const pose = getCurrentTcpPose();
+            if (!def || !pose) {
+                showToast("当前 TCP 状态离线或无效，无法保存倒茶点位", "error");
+                return;
+            }
+            teaPoints[key] = {
+                key,
+                label: def.label,
+                pose,
+                joints: getFreshJointsForRecord(),
+                gripperClosed: currentUiGripperClosed,
+                savedAt: Date.now(),
+            };
+            renderTeaPoints();
+            persistTeaPoints();
+            showToast(`已保存倒茶点位：${def.label}`, "success");
+        };
+
+        window.moveTeaPoint = (key) => {
+            if (!ensureConnected()) return;
+            const def = TEA_POINT_DEFS.find((item) => item.key === key);
+            const point = teaPoints[key];
+            if (!point) {
+                showToast(`${def?.label || key} 尚未保存`, "error");
+                return;
+            }
+            sendTcpTarget(point.pose);
+            showToast(`已发送倒茶点位：${point.label || def?.label || key}`, "success");
+        };
+
+        window.saveTeaPoints = async () => {
+            const payload = buildTeaPayload();
+            try {
+                window.localStorage.setItem(TEA_POINTS_STORAGE_KEY, JSON.stringify(payload));
+                const resp = await fetch("/tea-points", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) throw new Error(data.detail || "保存失败");
+                showToast(`已保存到 tea_points.txt：${Object.keys(teaPoints).length} 个点`, "success");
+            } catch (error) {
+                showToast(`倒茶点位保存失败：${error.message || error}`, "error");
+            }
+        };
+
+        window.loadTeaPoints = async (showMessage = true) => {
+            try {
+                const resp = await fetch("/tea-points", { cache: "no-store" });
+                if (resp.ok) {
+                    const payload = await resp.json();
+                    if (payload.ok && payload.data) {
+                        applyTeaPayload(payload.data);
+                        window.localStorage.setItem(TEA_POINTS_STORAGE_KEY, JSON.stringify(payload.data));
+                        if (showMessage) showToast(`已从 tea_points.txt 读取：${Object.keys(teaPoints).length} 个点`, "success");
+                        return;
+                    }
+                }
+            } catch (error) {
+                // Fall back to browser storage below.
+            }
+            try {
+                const raw = window.localStorage.getItem(TEA_POINTS_STORAGE_KEY);
+                if (!raw) {
+                    renderTeaPoints();
+                    if (showMessage) showToast("没有找到已保存的倒茶点位", "info");
+                    return;
+                }
+                applyTeaPayload(JSON.parse(raw));
+                persistTeaPoints();
+                if (showMessage) showToast(`已从浏览器缓存读取：${Object.keys(teaPoints).length} 个点`, "success");
+            } catch (error) {
+                showToast("读取倒茶点位失败，保存数据可能已损坏", "error");
+            }
+        };
+
+        const setTeaFlowStatus = (text, ok = null) => {
+            const node = document.getElementById("tea-flow-status");
+            if (!node) return;
+            node.textContent = text;
+            if (ok === true) {
+                node.className = "mt-4 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 p-4 text-xs leading-6 text-emerald-100";
+            } else if (ok === false) {
+                node.className = "mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-xs leading-6 text-red-200";
+            } else {
+                node.className = "mt-4 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300";
+            }
+        };
+
+        window.precheckTeaFlow = (showMessage = false) => {
+            const requiredKeys = [...new Set(TEA_FLOW_STEPS.map((step) => step.key))];
+            const missing = requiredKeys.filter((key) => !teaPoints[key]);
+            if (missing.length) {
+                const message = `倒茶流程缺少点位：${missing.map((key) => TEA_POINT_DEFS.find((item) => item.key === key)?.label || key).join("、")}`;
+                setTeaFlowStatus(message, false);
+                if (showMessage) showToast(message, "error");
+                return false;
+            }
+            const invalid = requiredKeys.filter((key) => {
+                const pose = teaPoints[key]?.pose;
+                return !Array.isArray(pose) || pose.length !== 6 || pose.some((value) => !Number.isFinite(Number(value)));
+            });
+            if (invalid.length) {
+                const message = `倒茶流程存在无效位姿：${invalid.join("、")}`;
+                setTeaFlowStatus(message, false);
+                if (showMessage) showToast(message, "error");
+                return false;
+            }
+            const message = `倒茶点位预检通过：${requiredKeys.length} 个关键点，${TEA_FLOW_STEPS.length} 个执行步骤`;
+            setTeaFlowStatus(message, true);
+            if (showMessage) showToast(message, "success");
+            return true;
+        };
+
+        const applyTeaStepGripper = async (closed) => {
+            window.sendTeaGripper(Boolean(closed));
+            await sleep(500);
+        };
+
+        const executeTeaStep = async (index) => {
+            const step = TEA_FLOW_STEPS[index];
+            if (!step) return false;
+            const point = teaPoints[step.key];
+            if (!point) throw new Error(`缺少倒茶点位：${step.label}`);
+            const label = `${index + 1}/${TEA_FLOW_STEPS.length} ${step.label}`;
+            setTeaFlowStatus(`倒茶流程：移动到 ${label}`, null);
+            sendTcpTarget(point.pose);
+            const idleDelta = await waitUntilRobotIdle(label);
+            setTeaFlowStatus(`倒茶流程：${label} 已停稳，切换夹爪为${step.gripperClosed ? "夹紧" : "松开"}`, null);
+            await applyTeaStepGripper(step.gripperClosed);
+            setTeaFlowStatus(`倒茶流程：${label} 完成，关节变化 ${idleDelta.toFixed(3)}deg`, true);
+            return true;
+        };
+
+        window.runNextTeaStep = async () => {
+            if (!ensureConnected()) return;
+            if (teaFlowBusy) {
+                showToast("倒茶流程正在执行", "info");
+                return;
+            }
+            if (!precheckTeaFlow(true)) return;
+            if (teaFlowStepIndex >= TEA_FLOW_STEPS.length) {
+                teaFlowStepIndex = 0;
+                showToast("倒茶流程已到末尾，已重置到第 1 步", "info");
+            }
+            teaFlowBusy = true;
+            teaFlowStopRequested = false;
+            try {
+                await executeTeaStep(teaFlowStepIndex);
+                teaFlowStepIndex += 1;
+            } catch (error) {
+                setTeaFlowStatus(error.message || "倒茶单步执行失败", false);
+                showToast(error.message || "倒茶单步执行失败", "error");
+            } finally {
+                teaFlowBusy = false;
+            }
+        };
+
+        window.runTeaFlow = async () => {
+            if (!ensureConnected()) return;
+            if (teaFlowBusy) {
+                showToast("倒茶流程正在执行", "info");
+                return;
+            }
+            if (!precheckTeaFlow(true)) return;
+            if (!confirm(`即将执行完整倒茶流程：${TEA_FLOW_STEPS.length} 步。请确认桌面、杯子、水瓶、茶叶和机器人周围安全。`)) return;
+
+            teaFlowBusy = true;
+            teaFlowStopRequested = false;
+            teaFlowStepIndex = 0;
+            try {
+                for (; teaFlowStepIndex < TEA_FLOW_STEPS.length; teaFlowStepIndex += 1) {
+                    if (teaFlowStopRequested) throw new Error("倒茶流程已手动停止");
+                    await executeTeaStep(teaFlowStepIndex);
+                    await sleep(500);
+                }
+                setTeaFlowStatus("倒茶流程：完整执行完成", true);
+                showToast("倒茶流程执行完成", "success");
+            } catch (error) {
+                setTeaFlowStatus(error.message || "倒茶流程执行中断", false);
+                showToast(error.message || "倒茶流程执行中断", "error");
+            } finally {
+                teaFlowBusy = false;
+            }
+        };
+
+        window.stopTeaFlow = () => {
+            teaFlowStopRequested = true;
+            if (teaFlowBusy) {
+                setTeaFlowStatus("倒茶流程：已请求停止，当前步停稳后中断", null);
+                showToast("已请求停止倒茶流程，当前运动不会被急停", "info");
+                return;
+            }
+            teaFlowStepIndex = 0;
+            setTeaFlowStatus("倒茶流程：已重置到第 1 步", null);
+            showToast("倒茶流程已重置", "info");
+        };
+
         const updateTeachGripperState = () => {
-            const stateNode = document.getElementById("teach-gripper-state");
-            if (!stateNode) return;
-            stateNode.textContent = currentUiGripperClosed ? "夹紧" : "松开";
-            stateNode.style.color = currentUiGripperClosed ? "#fbbf24" : "#67e8f9";
+            ["teach-gripper-state", "tea-gripper-state"].forEach((id) => {
+                const stateNode = document.getElementById(id);
+                if (!stateNode) return;
+                stateNode.textContent = currentUiGripperClosed ? "夹紧" : "松开";
+                stateNode.style.color = currentUiGripperClosed ? "#fbbf24" : "#67e8f9";
+            });
         };
 
         const renderTeachPoints = () => {
@@ -1749,11 +2201,12 @@
         };
 
         const calibrationPayload = () => ({
-            innerCols: Math.max(3, Math.round(numberValue("calib-cols", 9))),
-            innerRows: Math.max(3, Math.round(numberValue("calib-rows", 13))),
+            innerCols: Math.max(3, Math.round(numberValue("calib-cols", 8))),
+            innerRows: Math.max(3, Math.round(numberValue("calib-rows", 11))),
             squareSizeMm: Math.max(1, numberValue("calib-square", 25)),
-            paperZMm: numberValue("calib-paper-z", 550),
+            paperZMm: numberValue("calib-paper-z", 650),
             cameraTiltDeg: numberValue("calib-tilt", 0),
+            simulatePose: true,
         });
 
         const setCalibrationImage = (base64) => {
@@ -1762,6 +2215,21 @@
             if (!img || !placeholder || !base64) return;
             img.src = `data:image/jpeg;base64,${base64}`;
             placeholder.classList.add("hidden");
+        };
+
+        const setCalibrationStream = (url) => {
+            const img = document.getElementById("calibration-view");
+            const placeholder = document.getElementById("calibration-placeholder");
+            const canvas = document.getElementById("calibration-overlay");
+            if (!img || !placeholder) return;
+            img.src = url;
+            placeholder.classList.add("hidden");
+            if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+        };
+
+        const releaseCalibrationCamera = async () => {
+            window.stopCalibrationCamera();
+            await sleep(CALIBRATION_CAMERA_RELEASE_MS);
         };
 
         const sourceToCanvasMapper = (canvas, sourceWidth, sourceHeight) => {
@@ -1830,6 +2298,28 @@
             ctx.restore();
         };
 
+        const renderCalibrationPoseTable = (pose) => {
+            const body = document.getElementById("calibration-pose-table");
+            if (!body) return;
+            const truePose = pose?.truePose;
+            const solvedPose = pose?.closedLoopPose || pose?.simulatedPose;
+            const error = pose?.error;
+            const labels = ["X mm", "Y mm", "Z mm", "RX rad", "RY rad", "RZ rad"];
+            body.innerHTML = labels.map((label, index) => {
+                const fixed = index < 3 ? 2 : 5;
+                const trueValue = Array.isArray(truePose) && Number.isFinite(Number(truePose[index]))
+                    ? Number(truePose[index]).toFixed(fixed)
+                    : "--";
+                const solvedValue = Array.isArray(solvedPose) && Number.isFinite(Number(solvedPose[index]))
+                    ? Number(solvedPose[index]).toFixed(fixed)
+                    : "--";
+                const errorValue = Array.isArray(error) && Number.isFinite(Number(error[index]))
+                    ? Number(error[index]).toFixed(fixed)
+                    : "--";
+                return `<tr><td>${label}</td><td>${trueValue}</td><td>${solvedValue}</td><td>${errorValue}</td></tr>`;
+            }).join("");
+        };
+
         const renderCalibrationResult = (data) => {
             latestCalibrationResult = data;
             if (data.overlayImageBase64) setCalibrationImage(data.overlayImageBase64);
@@ -1838,6 +2328,9 @@
             const quality = data.quality || {};
             const pose = data.pose || {};
             const closedLoop = pose.closedLoopPose || null;
+            const detail = data.detail || "";
+            const captureFailed = !data.ok && /相机|DepthAI|OAK|USB|权限|占用|采集|超时|camera/i.test(detail);
+            renderCalibrationPoseTable(pose);
             document.getElementById("calib-hud-corners").textContent = quality.cornerCount ?? "--";
             document.getElementById("calib-hud-error").textContent = Number.isFinite(quality.meanReprojectionErrorPx)
                 ? `${quality.meanReprojectionErrorPx.toFixed(2)}px`
@@ -1850,75 +2343,82 @@
                 document.getElementById("calib-rpy").textContent = closedLoop.slice(3, 6).map((v) => Number(v).toFixed(4)).join(" / ");
                 document.getElementById("calib-xyz").textContent = closedLoop.slice(0, 3).map((v, i) => Number(v).toFixed(i < 2 ? 2 : 1)).join(" / ");
             }
-            document.getElementById("calib-quality").textContent = data.ok ? "棋盘锁定" : "未锁定";
+            document.getElementById("calib-quality").textContent = data.ok
+                ? (Number(quality.cornerCount || 0) > 0 ? (quality.partialMode ? "部分角点模拟" : "棋盘锁定模拟") : "随机模拟输出")
+                : (captureFailed ? "采集异常" : "搜索中");
             document.getElementById("calibration-result").textContent = data.ok && closedLoop
-                ? `标定结果：闭环位姿 X=${closedLoop[0].toFixed(2)} Y=${closedLoop[1].toFixed(2)} Z=${closedLoop[2].toFixed(1)} RX=${closedLoop[3].toFixed(5)} RY=${closedLoop[4].toFixed(5)} RZ=${closedLoop[5].toFixed(5)}；检测器=${quality.detector}；内参=${quality.cameraMatrixEstimated ? "估算" : "OAK-D EEPROM"}；深度=${quality.oakDepthMedianMm ? `${quality.oakDepthMedianMm.toFixed(0)}mm/${quality.oakDepthSamples}点` : "未使用"}`
+                ? `标定结果：模拟解算 X=${closedLoop[0].toFixed(2)} Y=${closedLoop[1].toFixed(2)} Z=${closedLoop[2].toFixed(1)} RX=${closedLoop[3].toFixed(5)} RY=${closedLoop[4].toFixed(5)} RZ=${closedLoop[5].toFixed(5)}；检测器=${quality.detector}；角点=${quality.cornerCount}/${quality.expectedCornerCount}；深度=${quality.oakDepthMedianMm ? `${quality.oakDepthMedianMm.toFixed(0)}mm/${quality.oakDepthSamples}点` : "固定Z"}`
                 : `标定结果：${data.detail || "未识别到完整棋盘"}`;
-            setCalibrationTag(data.ok ? "已锁定" : "未锁定", Boolean(data.ok));
+            setCalibrationTag(data.ok ? "实时模拟中" : (captureFailed ? "采集异常" : "搜索特征中"), Boolean(data.ok));
+        };
+
+        const runCalibrationLiveFrame = async (silent = false) => {
+            if (calibrationLiveBusy) return;
+            calibrationLiveBusy = true;
+            try {
+                if (!silent) setCalibrationTag("实时采集中");
+                const resp = await fetch("/pose-calibration/capture-analyze", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    cache: "no-store",
+                    body: JSON.stringify(calibrationPayload()),
+                });
+                const data = await resp.json();
+                if (data.overlayImageBase64) setCalibrationImage(data.overlayImageBase64);
+                else if (data.capturedImageBase64) setCalibrationImage(data.capturedImageBase64);
+                renderCalibrationResult(data);
+                if (!resp.ok && data.detail) {
+                    setCalibrationTag("采集异常", false);
+                    if (!silent) showToast(data.detail, "error");
+                }
+            } catch (error) {
+                setCalibrationTag("采集失败", false);
+                if (!silent) showToast(error.message || "OAK-D 实时标定失败", "error");
+            } finally {
+                calibrationLiveBusy = false;
+            }
         };
 
         window.startCalibrationCamera = async () => {
+            await releaseCalibrationCamera();
             await checkCamera();
-            const img = document.getElementById("calibration-view");
-            const placeholder = document.getElementById("calibration-placeholder");
-            if (!img || !placeholder) return;
-            img.src = `/camera/stream?t=${Date.now()}`;
-            placeholder.classList.add("hidden");
-            setCalibrationTag("OAK-D 预览中");
+            setCalibrationTag("实时标定启动中");
+            await runCalibrationLiveFrame(true);
+            calibrationLiveTimer = window.setInterval(() => runCalibrationLiveFrame(true), CALIBRATION_LIVE_INTERVAL_MS);
+            if (latestCalibrationResult?.overlayImageBase64 || latestCalibrationResult?.capturedImageBase64) {
+                setCalibrationTag(latestCalibrationResult.ok ? "实时模拟中" : "搜索特征中", Boolean(latestCalibrationResult.ok));
+            }
+        };
+
+        window.startCalibrationPreviewCamera = async () => {
+            await releaseCalibrationCamera();
+            await checkCamera();
+            setCalibrationStream(`/camera/stream?t=${Date.now()}`);
+            setCalibrationTag("OAK-D 原始预览中");
         };
 
         window.stopCalibrationCamera = () => {
+            if (calibrationLiveTimer) {
+                window.clearInterval(calibrationLiveTimer);
+                calibrationLiveTimer = null;
+            }
+            calibrationLiveBusy = false;
             const img = document.getElementById("calibration-view");
             const placeholder = document.getElementById("calibration-placeholder");
             const canvas = document.getElementById("calibration-overlay");
-            if (img) img.removeAttribute("src");
+            if (img) {
+                img.src = "about:blank";
+                img.removeAttribute("src");
+                if (typeof img.load === "function") img.load();
+            }
             if (placeholder) placeholder.classList.remove("hidden");
             if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
             setCalibrationTag("已停止");
         };
 
         window.analyzeCalibrationFromPreview = async () => {
-            try {
-                window.stopCalibrationCamera();
-                await sleep(320);
-                setCalibrationTag("拍照分析中");
-                const captureResp = await fetch("/camera/capture", { cache: "no-store" });
-                const capture = await captureResp.json();
-                if (!captureResp.ok || !capture.ok) throw new Error(capture.detail || "相机拍照失败");
-                setCalibrationImage(capture.imageBase64);
-
-                const resp = await fetch("/pose-calibration/analyze", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ...calibrationPayload(), imageBase64: capture.imageBase64 }),
-                });
-                const data = await resp.json();
-                renderCalibrationResult(data);
-                showToast(data.ok ? "棋盘姿态已解算" : data.detail, data.ok ? "success" : "error");
-            } catch (error) {
-                setCalibrationTag("分析失败", false);
-                showToast(error.message || "位姿标定失败", "error");
-            }
-        };
-
-        window.captureOakdCalibration = async () => {
-            try {
-                window.stopCalibrationCamera();
-                await sleep(320);
-                setCalibrationTag("OAK-D 深度采集中");
-                const resp = await fetch("/pose-calibration/capture-analyze", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(calibrationPayload()),
-                });
-                const data = await resp.json();
-                if (data.capturedImageBase64 && !data.overlayImageBase64) setCalibrationImage(data.capturedImageBase64);
-                renderCalibrationResult(data);
-                showToast(data.ok ? "OAK-D 位姿与深度已融合" : data.detail, data.ok ? "success" : "error");
-            } catch (error) {
-                setCalibrationTag("采集失败", false);
-                showToast(error.message || "OAK-D 标定采集失败", "error");
-            }
+            await releaseCalibrationCamera();
+            await runCalibrationLiveFrame(false);
         };
 
         window.applyCalibrationRpyToTcp = () => {
@@ -1932,20 +2432,43 @@
                 if (node) node.value = Number(pose[index]).toFixed(index < 3 ? 2 : 5);
             });
             persistFormState();
-            showToast("已回填闭环 TCP 位姿", "success");
+            showToast("已回填模拟 TCP 位姿", "success");
         };
 
         window.sendCalibratedTcpMove = () => {
-            const pose = latestCalibrationResult?.pose?.closedLoopPose;
-            if (!pose) {
-                showToast("请先完成位姿标定", "error");
-                return;
-            }
-            if (!ensureConnected()) return;
-            if (!confirm("将按标定闭环 RPY 执行 MOVEL，请确认末端和棋盘周围安全。")) return;
+            window.applyCalibrationRpyToTcp();
+        };
+
+        const sendCalibrationSequenceMove = async (pose, waitMs = 1800) => {
             ws.send(JSON.stringify({ type: "movel_cart", target: pose }));
             syncStatusTcpPose(pose);
-            showToast("闭环位姿指令已发送", "success");
+            await sleep(waitMs);
+        };
+
+        window.runCalibrationPickSequence = async () => {
+            if (!ensureConnected()) return;
+            if (!confirm("即将执行临时抓取流程。请确认夹爪、物体和周围空间安全。")) return;
+            try {
+                setCalibrationTag("抓取流程执行中");
+                window.sendGripper(true);
+                await sleep(700);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.approachPick, 2400);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.grasp, 1800);
+                window.sendGripper(false);
+                await sleep(1100);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.approachPick, 1800);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.approachRelease, 2600);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.release, 1800);
+                window.sendGripper(true);
+                await sleep(1100);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.approachRelease, 1800);
+                await sendCalibrationSequenceMove(CALIBRATION_PICK_SEQUENCE.start, 2200);
+                setCalibrationTag(calibrationLiveTimer ? "实时模拟中" : "抓取完成", calibrationLiveTimer ? true : null);
+                showToast("临时抓取流程已完成", "success");
+            } catch (error) {
+                setCalibrationTag("抓取中断", false);
+                showToast(error.message || "抓取流程失败", "error");
+            }
         };
 
         window.syncWritingCenter = () => {
@@ -2570,6 +3093,15 @@
             showToast(currentUiGripperClosed ? "夹爪夹紧指令已发送" : "夹爪松开指令已发送", "success");
         };
 
+        window.sendTeaGripper = (shouldClose) => {
+            if (!ensureConnected()) return;
+            const rawPayload = shouldClose ? true : false;
+            currentUiGripperClosed = Boolean(shouldClose);
+            updateTeachGripperState();
+            ws.send(JSON.stringify({ type: "gripper", closed: rawPayload }));
+            showToast(shouldClose ? "夹爪夹紧指令已发送" : "夹爪松开指令已发送", "success");
+        };
+
         window.sendWriting = async () => {
             if (!ensureConnected()) return;
             const { points, lift, generatedPointCount, maxWritePoints, pointLimitExceeded } = await makeWritingPath();
@@ -2642,12 +3174,14 @@
             },
             tea: {
                 title: "倒茶",
-                subtitle: "读取已保存的倒茶示教链，并串联再现倒茶动作。",
+                subtitle: "通过相机观察、关节/TCP 控制和关键点位保存，半示教建立倒茶流程。",
                 targetId: "tea",
+                keepPanelIds: ["qa", "robot-status", "teach", "tcp-control"],
+                keepColumns: true,
             },
             calibration: {
                 title: "位姿标定",
-                subtitle: "使用 OAK-D 双目深度相机识别棋盘格，闭环计算末端 RPY 姿态。",
+                subtitle: "使用 OAK-D 双目深度相机实时识别棋盘特征，并显示模拟闭环位姿。",
                 targetId: "calibration",
                 keepPanelIds: ["robot-status", "teach", "tcp-control"],
                 keepColumns: true,
@@ -2736,13 +3270,22 @@
                 restoreFormState();
                 previewWriting();
             });
+            loadTeaPoints(false);
             restoreFormState();
             renderTeachPoints();
+            renderTeaPoints();
             previewWriting();
             checkCamera();
             initTicTacToe();
             if (window.localStorage.getItem(AUTO_CONNECT_STORAGE_KEY) === "1") {
                 window.setTimeout(() => connectRobot({ silent: true }), 120);
+            }
+        });
+
+        window.addEventListener("beforeunload", () => {
+            if (calibrationLiveTimer) {
+                window.clearInterval(calibrationLiveTimer);
+                calibrationLiveTimer = null;
             }
         });
 
