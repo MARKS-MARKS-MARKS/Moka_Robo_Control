@@ -25,6 +25,7 @@ APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
 TEACH_PATH_FILE = PROJECT_ROOT / "teach_path.txt"
 TEA_POINTS_FILE = PROJECT_ROOT / "tea_points.txt"
+TEA_PATH_FILE = PROJECT_ROOT / "tea_path.txt"
 QA_PROVIDER = (os.environ.get("QA_PROVIDER") or "openai").strip().lower()
 QA_VISION_MODEL = os.environ.get("QA_VISION_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4.1-mini"
 ZHIPU_BASE_URL = (os.environ.get("ZHIPU_BASE_URL") or "https://api.z.ai/api/paas/v4").rstrip("/")
@@ -1119,6 +1120,33 @@ def save_teach_path(payload: dict = Body(...)):
     except Exception as exc:
         return JSONResponse({"ok": False, "detail": f"示教链文件保存失败: {exc}"}, status_code=500)
     return JSONResponse({"ok": True, "path": str(TEACH_PATH_FILE), "data": clean_payload})
+
+
+@app.get("/tea-path")
+def get_tea_path():
+    if not TEA_PATH_FILE.is_file():
+        return JSONResponse({"ok": False, "detail": "尚未保存倒茶示教链", "points": []}, status_code=404)
+    try:
+        with TEA_PATH_FILE.open("r", encoding="utf-8") as fp:
+            payload = json.load(fp)
+        clean_payload = _validate_teach_path_payload(payload)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": f"倒茶示教链文件读取失败: {exc}"}, status_code=500)
+    return JSONResponse({"ok": True, "path": str(TEA_PATH_FILE), "data": clean_payload})
+
+
+@app.post("/tea-path")
+def save_tea_path(payload: dict = Body(...)):
+    try:
+        clean_payload = _validate_teach_path_payload(payload)
+        with TEA_PATH_FILE.open("w", encoding="utf-8") as fp:
+            json.dump(clean_payload, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "detail": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "detail": f"倒茶示教链文件保存失败: {exc}"}, status_code=500)
+    return JSONResponse({"ok": True, "path": str(TEA_PATH_FILE), "data": clean_payload})
 
 
 @app.get("/tea-points")

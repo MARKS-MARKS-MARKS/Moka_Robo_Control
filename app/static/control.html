@@ -658,6 +658,15 @@
             </section>
 
             <aside class="col-span-12 space-y-5 lg:col-span-4">
+                <div id="tea-start" class="panel rounded-[24px] border-amber-300/30 bg-amber-300/10 p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="text-sm font-black tracking-[0.22em] text-amber-200">倒茶启动</h2>
+                        <span class="rounded-full border border-amber-400/40 bg-slate-950/55 px-4 py-2 text-xs font-bold text-amber-100">全示教链</span>
+                    </div>
+                    <button onclick="replayTeaTeachPath()" class="w-full rounded-2xl bg-amber-400 py-4 text-base font-black text-slate-950 transition hover:bg-amber-300">启动倒茶</button>
+                    <div class="mt-3 text-xs leading-6 text-amber-100/85">执行前请确认已读取/保存倒茶链，杯子、水瓶、茶叶和周围空间安全。</div>
+                </div>
+
                 <div id="teach" class="panel rounded-[24px] p-5">
                     <h2 class="mb-4 text-sm font-black tracking-[0.22em] text-emerald-200">关节控制</h2>
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -712,10 +721,10 @@
                 <div id="tea" class="panel rounded-[24px] p-5">
                     <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h2 class="text-sm font-black tracking-[0.22em] text-amber-200">倒茶半示教</h2>
-                            <p class="mt-2 text-xs leading-6 text-slate-300">先手动控制机械臂到关键位置，点击按钮保存当前 TCP/关节/夹爪状态到 tea_points.txt。</p>
+                            <h2 class="text-sm font-black tracking-[0.22em] text-amber-200">倒茶全示教链</h2>
+                            <p class="mt-2 text-xs leading-6 text-slate-300">像 TCP 示教再现一样，按真实倒茶动作顺序记录每一个作业点，保存到 tea_path.txt 后串联再现。</p>
                         </div>
-                        <span id="tea-points-count" class="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200">0 点</span>
+                        <span id="tea-chain-count" class="rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200">0 点</span>
                     </div>
                     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <button onclick="startCamera()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">开启相机</button>
@@ -732,25 +741,23 @@
                             <button onclick="sendTeaGripper(true)" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">夹紧</button>
                         </div>
                     </div>
-                    <div id="tea-point-buttons" class="mt-4 grid grid-cols-1 gap-3"></div>
                     <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button onclick="saveTeaPoints()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">保存倒茶点位</button>
-                        <button onclick="loadTeaPoints(true)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">读取倒茶点位</button>
+                        <div class="input-row"><span class="w-16 text-xs text-slate-400">备用ms</span><input id="tea-delay" type="number" class="coord-input" value="2500" min="300" max="60000" step="100"></div>
+                        <button onclick="recordTeaTeachPoint()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">记录当前作业点</button>
                     </div>
-                    <div id="tea-points-list" class="mt-4 rounded-2xl border border-amber-300/30 bg-slate-950/65 p-5 text-xs text-slate-300">暂无倒茶点位</div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="moveLastTeaTeachPoint()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">移动到最后点</button>
+                        <button onclick="removeLastTeaTeachPoint()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">删除最后点</button>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button onclick="saveTeaTeachPath()" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">保存倒茶链</button>
+                        <button onclick="loadTeaTeachPath(true)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">读取倒茶链</button>
+                        <button onclick="clearTeaTeachPoints()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">清空倒茶链</button>
+                    </div>
+                    <div id="tea-flow-status" class="mt-4 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300">倒茶示教链：等待记录</div>
+                    <div id="tea-chain-list" class="mt-4 rounded-2xl border border-amber-300/30 bg-slate-950/65 p-5 text-xs text-slate-300">暂无倒茶作业点</div>
                     <div class="mt-4 rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-xs leading-6 text-amber-100">
-                        倒茶执行前建议至少保存：抓茶叶点、茶叶安全过渡点、杯口点、抓水瓶点、水瓶安全过渡点、倒水姿态点、水瓶放回点和结束安全点。
-                    </div>
-                    <div id="tea-flow-status" class="mt-4 rounded-2xl border border-cyan-400/10 bg-slate-950/65 p-4 text-xs leading-6 text-slate-300">倒茶流程：等待预检</div>
-                    <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button onclick="precheckTeaFlow(true)" class="rounded-2xl border border-cyan-400/10 bg-cyan-400/10 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-400/20">预检倒茶点位</button>
-                        <button onclick="runNextTeaStep()" class="rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">单步执行下一步</button>
-                        <button onclick="runTeaFlow()" class="rounded-2xl bg-amber-400 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">执行完整倒茶</button>
-                        <button onclick="stopTeaFlow()" class="rounded-2xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-200 transition hover:bg-red-500/20">停止/重置流程</button>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <button onclick="loadTeachPath(true)" class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/20">读取普通示教链</button>
-                        <button onclick="replayTeachPath()" class="mt-3 rounded-2xl bg-amber-400 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">执行普通示教链</button>
+                        建议记录顺序：观察位、抓茶叶、茶叶规避、杯口放茶、水瓶规避、抓水瓶、倒水姿态、水瓶放回、结束安全点。每个作业点会记录当前 TCP 和夹爪状态。
                     </div>
                 </div>
 
@@ -840,16 +847,24 @@
         const GRIPPER_CLOSED_PAYLOAD = false;
         const TEACH_STORAGE_KEY = "moka_tcp_teach_path_v1";
         const TEA_POINTS_STORAGE_KEY = "moka_tea_points_v1";
+        const TEA_TEACH_STORAGE_KEY = "moka_tea_teach_path_v1";
         const QA_CONFIG_STORAGE_KEY = "moka_smart_qa_config_v1";
         const STATUS_STORAGE_KEY = "moka_robot_status_snapshot_v1";
         const AUTO_CONNECT_STORAGE_KEY = "moka_robot_auto_connect_v1";
         const FORM_STORAGE_KEY = "moka_control_form_values_v1";
         const LANDING_PREFLIGHT_Z = 560;
-        const TEACH_IDLE_POLL_MS = 2000;
+        const TEACH_IDLE_POLL_MS = 1000;
         const TEACH_IDLE_JOINT_EPS_DEG = 0.05;
+        const TEACH_IDLE_STATUS_MAX_AGE_SEC = 15;
+        const TEACH_IDLE_MISSING_LIMIT = 10;
+        const TEACH_IDLE_TCP_POS_EPS_MM = 3.0;
+        const TEACH_IDLE_TCP_ROT_EPS_RAD = 0.03;
+        const TEACH_IDLE_STABLE_SAMPLES = 2;
         let currentUiGripperClosed = false;
         let teachReplayBusy = false;
         let teachPoints = [];
+        let teaTeachReplayBusy = false;
+        let teaTeachPoints = [];
         let teaPoints = {};
         let teaFlowBusy = false;
         let teaFlowStopRequested = false;
@@ -1271,10 +1286,7 @@
             }
         };
 
-        const getCurrentTcpPose = () => {
-            const statusAge = Date.now() / 1000 - latestStatus.updated_at;
-            if (!latestStatus.bridge_connected || !latestStatus.updated_at || statusAge > 2) return null;
-            const tcp = latestStatus.tcp;
+        const validateTcpPose = (tcp) => {
             if (!Array.isArray(tcp) || tcp.length !== 6) return null;
             const pose = tcp.map((value) => Number(value));
             if (pose.some((value) => !Number.isFinite(value))) return null;
@@ -1282,6 +1294,20 @@
                 return null;
             }
             return pose;
+        };
+
+        const getTcpPoseFromInputs = () => {
+            const keys = ["x", "y", "z", "rx", "ry", "rz"];
+            return validateTcpPose(keys.map((key) => parseNumber(`in-${key}`)));
+        };
+
+        const getCurrentTcpPose = () => {
+            const statusAge = Date.now() / 1000 - latestStatus.updated_at;
+            if (latestStatus.updated_at && statusAge <= 5) {
+                const pose = validateTcpPose(latestStatus.tcp);
+                if (pose) return pose;
+            }
+            return getTcpPoseFromInputs();
         };
 
         const formatTeachPose = (pose) => (
@@ -1562,10 +1588,11 @@
             const label = `${index + 1}/${TEA_FLOW_STEPS.length} ${step.label}`;
             setTeaFlowStatus(`倒茶流程：移动到 ${label}`, null);
             sendTcpTarget(point.pose);
-            const idleDelta = await waitUntilRobotIdle(label);
+            const idleState = await waitUntilRobotIdle(label, point.pose);
+            const idleDelta = idleState.jointDelta;
             setTeaFlowStatus(`倒茶流程：${label} 已停稳，切换夹爪为${step.gripperClosed ? "夹紧" : "松开"}`, null);
             await applyTeaStepGripper(step.gripperClosed);
-            setTeaFlowStatus(`倒茶流程：${label} 完成，关节变化 ${idleDelta.toFixed(3)}deg`, true);
+            setTeaFlowStatus(`倒茶流程：${label} 完成，关节变化 ${idleDelta.toFixed(3)}deg，TCP误差 ${idleState.tcpPosError.toFixed(1)}mm/${idleState.tcpRotError.toFixed(3)}rad`, true);
             return true;
         };
 
@@ -1631,6 +1658,272 @@
             teaFlowStepIndex = 0;
             setTeaFlowStatus("倒茶流程：已重置到第 1 步", null);
             showToast("倒茶流程已重置", "info");
+        };
+
+        const getTeaTeachDelayMs = () => (
+            clampTeachDelay(numberValue("tea-delay", 2500))
+        );
+
+        const buildTeaTeachPayload = () => ({
+            version: 1,
+            defaultDelayMs: getTeaTeachDelayMs(),
+            points: teaTeachPoints,
+            savedAt: Date.now(),
+        });
+
+        const persistTeaTeachPath = () => {
+            const payload = buildTeaTeachPayload();
+            try {
+                window.localStorage.setItem(TEA_TEACH_STORAGE_KEY, JSON.stringify(payload));
+            } catch (error) {
+                showToast("倒茶示教链缓存失败，请检查浏览器存储权限", "error");
+            }
+            fetch("/tea-path", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            }).catch(() => {
+                // Browser storage keeps the path when the backend is temporarily unavailable.
+            });
+        };
+
+        const renderTeaTeachPoints = () => {
+            const listNode = document.getElementById("tea-chain-list");
+            const countNode = document.getElementById("tea-chain-count");
+            if (countNode) countNode.textContent = `${teaTeachPoints.length} 点`;
+            if (!listNode) return;
+            listNode.innerHTML = "";
+            if (teaTeachPoints.length === 0) {
+                listNode.textContent = "暂无倒茶作业点";
+                setTeaFlowStatus("倒茶示教链：等待记录", null);
+                return;
+            }
+            teaTeachPoints.forEach((point, index) => {
+                const item = document.createElement("div");
+                item.className = "mb-2 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3";
+
+                const title = document.createElement("div");
+                title.className = "mb-2 flex items-center justify-between text-sm font-black text-amber-100";
+                const name = document.createElement("span");
+                name.textContent = `倒茶 P${index + 1}`;
+                const gripper = document.createElement("button");
+                gripper.type = "button";
+                gripper.className = "rounded-full border border-cyan-400/10 bg-cyan-400/10 px-4 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-400/20";
+                gripper.textContent = point.gripperClosed ? "夹爪夹紧" : "夹爪松开";
+                gripper.onclick = () => {
+                    teaTeachPoints[index].gripperClosed = !teaTeachPoints[index].gripperClosed;
+                    persistTeaTeachPath();
+                    renderTeaTeachPoints();
+                    showToast(`已切换倒茶 P${index + 1} 夹爪状态`, "info");
+                };
+                title.appendChild(name);
+                title.appendChild(gripper);
+
+                const poseGrid = document.createElement("div");
+                poseGrid.className = "grid grid-cols-1 gap-2 sm:grid-cols-2";
+                ["X", "Y", "Z", "RX", "RY", "RZ"].forEach((label, poseIndex) => {
+                    const poseRow = document.createElement("div");
+                    poseRow.className = "input-row";
+                    const poseLabel = document.createElement("span");
+                    poseLabel.className = "w-16 text-xs text-slate-400";
+                    poseLabel.textContent = label;
+                    const poseInput = document.createElement("input");
+                    poseInput.type = "number";
+                    poseInput.className = "coord-input";
+                    poseInput.step = poseIndex < 3 ? "0.1" : "0.001";
+                    poseInput.value = Number(point.pose[poseIndex]).toFixed(poseIndex < 3 ? 1 : 4);
+                    poseInput.onchange = () => {
+                        const value = Number.parseFloat(poseInput.value || "0");
+                        if (!Number.isFinite(value)) {
+                            poseInput.value = Number(teaTeachPoints[index].pose[poseIndex]).toFixed(poseIndex < 3 ? 1 : 4);
+                            showToast(`倒茶 P${index + 1} ${label} 坐标无效`, "error");
+                            return;
+                        }
+                        teaTeachPoints[index].pose[poseIndex] = value;
+                        poseInput.value = value.toFixed(poseIndex < 3 ? 1 : 4);
+                        persistTeaTeachPath();
+                        showToast(`已更新倒茶 P${index + 1} ${label}`, "info");
+                    };
+                    poseRow.appendChild(poseLabel);
+                    poseRow.appendChild(poseInput);
+                    poseGrid.appendChild(poseRow);
+                });
+
+                const delayRow = document.createElement("div");
+                delayRow.className = "mt-2 input-row";
+                const delayLabel = document.createElement("span");
+                delayLabel.className = "w-16 text-xs text-slate-400";
+                delayLabel.textContent = "备用ms";
+                const delayInput = document.createElement("input");
+                delayInput.type = "number";
+                delayInput.className = "coord-input";
+                delayInput.min = "300";
+                delayInput.step = "100";
+                delayInput.value = String(point.delayMs || getTeaTeachDelayMs());
+                delayInput.onchange = () => {
+                    const value = clampTeachDelay(delayInput.value);
+                    teaTeachPoints[index].delayMs = value;
+                    delayInput.value = String(value);
+                    persistTeaTeachPath();
+                    showToast(`已更新倒茶 P${index + 1} 等待时间：${value}ms`, "info");
+                };
+                delayRow.appendChild(delayLabel);
+                delayRow.appendChild(delayInput);
+
+                item.appendChild(title);
+                item.appendChild(poseGrid);
+                item.appendChild(delayRow);
+                listNode.appendChild(item);
+            });
+            setTeaFlowStatus(`倒茶示教链：已载入 ${teaTeachPoints.length} 个作业点`, true);
+        };
+
+        const applyTeaTeachPayload = (payload) => {
+            const loadedPoints = Array.isArray(payload.points)
+                ? payload.points.map(normalizeTeachPoint).filter(Boolean)
+                : [];
+            teaTeachPoints = loadedPoints;
+            if (Number.isFinite(Number(payload.defaultDelayMs))) {
+                const delayInput = document.getElementById("tea-delay");
+                if (delayInput) delayInput.value = clampTeachDelay(payload.defaultDelayMs);
+            }
+            renderTeaTeachPoints();
+        };
+
+        window.saveTeaTeachPath = async () => {
+            const payload = buildTeaTeachPayload();
+            try {
+                window.localStorage.setItem(TEA_TEACH_STORAGE_KEY, JSON.stringify(payload));
+                const resp = await fetch("/tea-path", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) throw new Error(data.detail || "保存失败");
+                showToast(`已保存到 tea_path.txt：${teaTeachPoints.length} 个点`, "success");
+            } catch (error) {
+                showToast(`倒茶示教链文件保存失败：${error.message || error}`, "error");
+            }
+        };
+
+        window.loadTeaTeachPath = async (showMessage = true) => {
+            try {
+                const resp = await fetch("/tea-path", { cache: "no-store" });
+                if (resp.ok) {
+                    const payload = await resp.json();
+                    if (payload.ok && payload.data) {
+                        applyTeaTeachPayload(payload.data);
+                        window.localStorage.setItem(TEA_TEACH_STORAGE_KEY, JSON.stringify(payload.data));
+                        if (showMessage) showToast(`已从 tea_path.txt 读取：${teaTeachPoints.length} 个点`, "success");
+                        return;
+                    }
+                }
+            } catch (error) {
+                // Fall back to browser storage below.
+            }
+            try {
+                const raw = window.localStorage.getItem(TEA_TEACH_STORAGE_KEY);
+                if (!raw) {
+                    renderTeaTeachPoints();
+                    if (showMessage) showToast("没有找到已保存的倒茶示教链", "info");
+                    return;
+                }
+                const payload = JSON.parse(raw);
+                applyTeaTeachPayload(payload);
+                persistTeaTeachPath();
+                if (showMessage) showToast(`已从浏览器缓存读取：${teaTeachPoints.length} 个点`, "success");
+            } catch (error) {
+                showToast("读取倒茶示教链失败，保存数据可能已损坏", "error");
+            }
+        };
+
+        window.recordTeaTeachPoint = () => {
+            const pose = getCurrentTcpPose();
+            if (!pose) {
+                showToast("当前 TCP 状态离线或无效，无法记录倒茶作业点", "error");
+                return;
+            }
+            teaTeachPoints.push({
+                pose,
+                gripperClosed: currentUiGripperClosed,
+                delayMs: getTeaTeachDelayMs(),
+                recordedAt: Date.now(),
+            });
+            renderTeaTeachPoints();
+            persistTeaTeachPath();
+            showToast(`已记录倒茶 P${teaTeachPoints.length}：夹爪${currentUiGripperClosed ? "夹紧" : "松开"}`, "success");
+        };
+
+        window.moveLastTeaTeachPoint = () => {
+            if (!ensureConnected()) return;
+            const point = teaTeachPoints[teaTeachPoints.length - 1];
+            if (!point) {
+                showToast("还没有记录倒茶作业点", "error");
+                return;
+            }
+            sendTcpTarget(point.pose);
+            showToast(`已发送倒茶 P${teaTeachPoints.length} TCP 位姿`, "success");
+        };
+
+        window.replayTeaTeachPath = async () => {
+            if (!ensureConnected()) return;
+            if (teaTeachReplayBusy) {
+                showToast("倒茶示教链正在执行", "info");
+                return;
+            }
+            if (teaTeachPoints.length === 0) {
+                showToast("还没有记录倒茶作业点", "error");
+                return;
+            }
+            if (!confirm(`即将串联再现 ${teaTeachPoints.length} 个倒茶作业点。每 1 秒监测一次关节状态和 TCP 到位误差，确认已停稳并到达目标后进入下一步。请确认机器人周围安全。`)) return;
+
+            teaTeachReplayBusy = true;
+            try {
+                for (let index = 0; index < teaTeachPoints.length; index += 1) {
+                    const point = teaTeachPoints[index];
+                    const pointLabel = `倒茶 P${index + 1}/${teaTeachPoints.length}`;
+                    setTeaFlowStatus(`${pointLabel}：发送 TCP 位姿`, null);
+                    sendTcpTarget(point.pose);
+                    const idleState = await waitUntilRobotIdle(pointLabel, point.pose);
+                    const idleDelta = idleState.jointDelta;
+                    await sleep(Number(point.delayMs || getTeaTeachDelayMs()));
+                    window.sendTeaGripper(Boolean(point.gripperClosed));
+                    setTeaFlowStatus(`${pointLabel}：已停稳，夹爪${point.gripperClosed ? "夹紧" : "松开"}，变化 ${idleDelta.toFixed(3)}deg，TCP误差 ${idleState.tcpPosError.toFixed(1)}mm/${idleState.tcpRotError.toFixed(3)}rad`, true);
+                    await sleep(500);
+                }
+                setTeaFlowStatus("倒茶示教链再现完成", true);
+                showToast("倒茶示教链再现完成", "success");
+            } catch (error) {
+                setTeaFlowStatus(error.message || "倒茶示教链再现异常停止", false);
+                showToast(error.message || "倒茶示教链再现异常停止", "error");
+            } finally {
+                teaTeachReplayBusy = false;
+            }
+        };
+
+        window.removeLastTeaTeachPoint = () => {
+            if (teaTeachPoints.length === 0) {
+                showToast("还没有记录倒茶作业点", "error");
+                return;
+            }
+            const removedIndex = teaTeachPoints.length;
+            teaTeachPoints.pop();
+            renderTeaTeachPoints();
+            persistTeaTeachPath();
+            showToast(`已删除倒茶 P${removedIndex}`, "info");
+        };
+
+        window.clearTeaTeachPoints = () => {
+            if (teaTeachPoints.length === 0) {
+                showToast("倒茶作业点列表已经为空", "info");
+                return;
+            }
+            if (!confirm("确认清空全部倒茶示教作业点？")) return;
+            teaTeachPoints = [];
+            renderTeaTeachPoints();
+            persistTeaTeachPath();
+            showToast("已清空倒茶示教作业点", "info");
         };
 
         const updateTeachGripperState = () => {
@@ -1737,32 +2030,111 @@
 
         const getFreshJointSnapshot = () => {
             const statusAge = Date.now() / 1000 - latestStatus.updated_at;
-            if (!latestStatus.bridge_connected || !latestStatus.updated_at || statusAge > 2.5) return null;
+            if (!latestStatus.updated_at || statusAge > TEACH_IDLE_STATUS_MAX_AGE_SEC) return null;
             if (!Array.isArray(latestStatus.joints) || latestStatus.joints.length !== 6) return null;
             const joints = latestStatus.joints.map((value) => Number(value));
             return joints.some((value) => !Number.isFinite(value)) ? null : joints;
+        };
+
+        const getFreshTcpSnapshot = () => {
+            const statusAge = Date.now() / 1000 - latestStatus.updated_at;
+            if (!latestStatus.updated_at || statusAge > TEACH_IDLE_STATUS_MAX_AGE_SEC) return null;
+            return validateTcpPose(latestStatus.tcp);
         };
 
         const maxJointDelta = (a, b) => (
             Math.max(...a.map((value, index) => Math.abs(value - b[index])))
         );
 
-        const waitUntilRobotIdle = async (pointLabel) => {
-            await sleep(TEACH_IDLE_POLL_MS);
-            let previous = getFreshJointSnapshot();
+        const angleDeltaRad = (a, b) => {
+            let delta = Number(a) - Number(b);
+            while (delta > Math.PI) delta -= Math.PI * 2;
+            while (delta < -Math.PI) delta += Math.PI * 2;
+            return Math.abs(delta);
+        };
+
+        const tcpTargetError = (targetPose) => {
+            const target = validateTcpPose(targetPose);
+            if (!target) {
+                return {
+                    ok: true,
+                    posError: 0,
+                    rotError: 0,
+                    hasTarget: false,
+                    hasTcp: true,
+                };
+            }
+            const current = getFreshTcpSnapshot();
+            if (!current) {
+                return {
+                    ok: false,
+                    posError: Number.POSITIVE_INFINITY,
+                    rotError: Number.POSITIVE_INFINITY,
+                    hasTarget: true,
+                    hasTcp: false,
+                };
+            }
+            const dx = current[0] - target[0];
+            const dy = current[1] - target[1];
+            const dz = current[2] - target[2];
+            const posError = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const rotError = Math.max(
+                angleDeltaRad(current[3], target[3]),
+                angleDeltaRad(current[4], target[4]),
+                angleDeltaRad(current[5], target[5]),
+            );
+            return {
+                ok: posError <= TEACH_IDLE_TCP_POS_EPS_MM && rotError <= TEACH_IDLE_TCP_ROT_EPS_RAD,
+                posError,
+                rotError,
+                hasTarget: true,
+                hasTcp: true,
+            };
+        };
+
+        const waitUntilRobotIdle = async (pointLabel, targetPose = null) => {
+            let previous = null;
+            for (let attempt = 0; attempt < TEACH_IDLE_MISSING_LIMIT && !previous; attempt += 1) {
+                await sleep(TEACH_IDLE_POLL_MS);
+                previous = getFreshJointSnapshot();
+            }
             if (!previous) throw new Error("没有收到有效关节状态，无法判定运动停止");
 
+            let missingCount = 0;
+            let stableCount = 0;
             while (true) {
                 await sleep(TEACH_IDLE_POLL_MS);
                 const current = getFreshJointSnapshot();
-                if (!current) throw new Error("关节状态中断，已停止示教再现");
+                const targetError = tcpTargetError(targetPose);
+                if (!current || !targetError.hasTcp) {
+                    missingCount += 1;
+                    showToast(`${pointLabel} 状态短暂中断，等待恢复 ${missingCount}/${TEACH_IDLE_MISSING_LIMIT}`, "info");
+                    if (missingCount >= TEACH_IDLE_MISSING_LIMIT) {
+                        throw new Error("关节或 TCP 状态连续中断，已停止示教再现");
+                    }
+                    continue;
+                }
+                missingCount = 0;
 
                 const delta = maxJointDelta(previous, current);
-                if (delta <= TEACH_IDLE_JOINT_EPS_DEG) {
-                    return delta;
+                const jointStable = delta <= TEACH_IDLE_JOINT_EPS_DEG;
+                if (jointStable && targetError.ok) {
+                    stableCount += 1;
+                    if (stableCount >= TEACH_IDLE_STABLE_SAMPLES) {
+                        return {
+                            jointDelta: delta,
+                            tcpPosError: targetError.posError,
+                            tcpRotError: targetError.rotError,
+                        };
+                    }
+                } else {
+                    stableCount = 0;
                 }
 
-                showToast(`${pointLabel} 仍在运动，最大关节变化 ${delta.toFixed(3)}deg`, "info");
+                const tcpText = targetError.hasTarget
+                    ? `，TCP误差 ${targetError.posError.toFixed(1)}mm/${targetError.rotError.toFixed(3)}rad`
+                    : "";
+                showToast(`${pointLabel} 仍在运动，最大关节变化 ${delta.toFixed(3)}deg${tcpText}`, "info");
                 previous = current;
             }
         };
@@ -1805,7 +2177,7 @@
                 showToast("还没有记录作业点", "error");
                 return;
             }
-            if (!confirm(`即将串联再现 ${teachPoints.length} 个作业点。每 2 秒监测一次关节状态，确认无轴运动后进入下一步。请确认机器人周围安全。`)) return;
+            if (!confirm(`即将串联再现 ${teachPoints.length} 个作业点。每 1 秒监测一次关节状态和 TCP 到位误差，确认已停稳并到达目标后进入下一步。请确认机器人周围安全。`)) return;
 
             teachReplayBusy = true;
             try {
@@ -1814,14 +2186,15 @@
                     const pointLabel = `P${index + 1}/${teachPoints.length}`;
                     sendTcpTarget(point.pose);
                     showToast(`再现 ${pointLabel}：监测运动状态`, "info");
-                    const idleDelta = await waitUntilRobotIdle(pointLabel);
+                    const idleState = await waitUntilRobotIdle(pointLabel, point.pose);
+                    const idleDelta = idleState.jointDelta;
                     ws.send(JSON.stringify({
                         type: "gripper",
                         closed: gripperPayloadFromUiState(point.gripperClosed),
                     }));
                     currentUiGripperClosed = point.gripperClosed;
                     updateTeachGripperState();
-                    showToast(`再现 ${pointLabel}：已停止，夹爪${point.gripperClosed ? "夹紧" : "松开"}，变化 ${idleDelta.toFixed(3)}deg`, "success");
+                    showToast(`再现 ${pointLabel}：已停稳，夹爪${point.gripperClosed ? "夹紧" : "松开"}，变化 ${idleDelta.toFixed(3)}deg，TCP误差 ${idleState.tcpPosError.toFixed(1)}mm/${idleState.tcpRotError.toFixed(3)}rad`, "success");
                     await sleep(500);
                 }
                 showToast("示教路径再现完成", "success");
@@ -3176,7 +3549,7 @@
                 title: "倒茶",
                 subtitle: "通过相机观察、关节/TCP 控制和关键点位保存，半示教建立倒茶流程。",
                 targetId: "tea",
-                keepPanelIds: ["qa", "robot-status", "teach", "tcp-control"],
+                keepPanelIds: ["tea-start", "qa", "robot-status", "teach", "tcp-control"],
                 keepColumns: true,
             },
             calibration: {
@@ -3271,9 +3644,11 @@
                 previewWriting();
             });
             loadTeaPoints(false);
+            loadTeaTeachPath(false);
             restoreFormState();
             renderTeachPoints();
             renderTeaPoints();
+            renderTeaTeachPoints();
             previewWriting();
             checkCamera();
             initTicTacToe();
