@@ -11,7 +11,9 @@ Moka Robot Control 是一个面向 MR07S 六轴机械臂的实验控制项目。
 ```text
 https://github.com/MARKS-MARKS-MARKS/Moka_Robo_Control
 ```
+## 演示视频
 
+![机器人巡检演示](./RobotControl_Tea.gif)
 ## 目录结构
 
 ```text
